@@ -1,0 +1,4 @@
+[Project]
+Name=darling-hfsplus
+Manager=KDevCMakeManager
+VersionControl=kdevgit
