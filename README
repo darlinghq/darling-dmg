@@ -1,0 +1,4 @@
+This project will contain a FUSE module to allow users to mount .dmg files (containing applications for OS X).
+
+The name is derived from the HFS+ filesystem, that is expected to be contained within the .dmg files.
+
