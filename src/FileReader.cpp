@@ -1,0 +1,24 @@
+#include "FileReader.h"
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+
+FileReader::FileReader(const std::string& path)
+: m_fd(-1)
+{
+	m_fd = ::open(path.c_str(), O_RDONLY);
+}
+
+FileReader::~FileReader()
+{
+	if (m_fd != -1)
+		::close(m_fd);
+}
+
+int32_t FileReader::read(void* buf, int32_t count, uint64_t offset)
+{
+	if (m_fd == -1)
+		return -1;
+	
+	return ::pread(m_fd, buf, count, offset);
+}
