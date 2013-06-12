@@ -26,10 +26,12 @@ HFSBTree::HFSBTree(HFSFork* fork)
 	std::cout << "leaf records: " << be(m_header.leafRecords) << std::endl;
 	std::cout << "node size: " << be(m_header.nodeSize) << std::endl;
 	
+	/*
 	if (m_header.rootNode)
 	{
 		walkTree(be(m_header.rootNode));
 	}
+	*/
 }
 
 HFSBTreeNode HFSBTree::findLeafNode(const Key* indexKey, KeyComparator comp)
@@ -130,6 +132,7 @@ HFSBTreeNode HFSBTree::traverseTree(int nodeIndex, const Key* indexKey, KeyCompa
 	return HFSBTreeNode();
 }
 
+/*
 void HFSBTree::walkTree(int nodeIndex)
 {
 	BTNodeDescriptor* desc;
@@ -222,6 +225,7 @@ void HFSBTree::walkTree(int nodeIndex)
 			break;
 	}
 }
+*/
 
 HFSBTree::~HFSBTree()
 {
