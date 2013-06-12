@@ -75,6 +75,18 @@ struct BLKXRun
 	uint64_t compLength;
 };
 
+enum class RunType : uint32_t
+{
+	ZeroFill = 0,
+	Raw = 1,
+	Unknown = 2,
+	ADC = 0x80000004,
+	Zlib = 0x80000005,
+	Bzip2 = 0x80000006,
+	Comment = 0x7ffffffe,
+	Terminator = 0xffffffff
+};
+
 struct SizeResource
 {
 	uint16_t version; /* set to 5 */

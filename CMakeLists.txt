@@ -29,8 +29,9 @@ add_executable(darling-hfsplus
 
 	src/DMGDisk.cpp
 	src/DMGPartition.cpp
+	src/adc.cpp
 )
 
-target_link_libraries(darling-hfsplus -licuuc -lssl ${LIBXML2_LIBRARY})
+target_link_libraries(darling-hfsplus -licuuc -lssl -lz -lbz2 ${LIBXML2_LIBRARY})
 install(TARGETS darling-hfsplus RUNTIME DESTINATION bin)
 

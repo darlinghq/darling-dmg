@@ -5,6 +5,7 @@
 #include <cstring>
 #include <openssl/bio.h>
 #include <openssl/evp.h>
+#include <memory>
 #include "DMGPartition.h"
 
 DMGDisk::DMGDisk(Reader* reader)
@@ -34,7 +35,7 @@ DMGDisk::~DMGDisk()
 
 void DMGDisk::loadKoly(const UDIFResourceFile& koly)
 {
-	char* xmlData;
+	std::unique_ptr<char[]> xmlData;
 	xmlXPathContextPtr xpathContext;
 	xmlXPathObjectPtr xpathObj;
 	uint64_t offset, length;
@@ -42,11 +43,10 @@ void DMGDisk::loadKoly(const UDIFResourceFile& koly)
 	offset = be(koly.fUDIFXMLOffset);
 	length = be(koly.fUDIFXMLLength);
 
-	xmlData = new char[length];
-	m_reader->read(xmlData, length, offset);
+	xmlData.reset(new char[length]);
+	m_reader->read(xmlData.get(), length, offset);
 
-	m_kolyXML = xmlParseMemory(xmlData, length);
-	delete [] xmlData;
+	m_kolyXML = xmlParseMemory(xmlData.get(), length);
 
 	xpathContext = xmlXPathNewContext(m_kolyXML);
 
