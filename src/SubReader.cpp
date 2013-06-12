@@ -12,3 +12,8 @@ int32_t SubReader::read(void* buf, int32_t count, uint64_t offset)
 	
 	return m_parent->read(buf, count, offset + m_offset);
 }
+
+uint64_t SubReader::length()
+{
+	return m_size;
+}

@@ -10,6 +10,7 @@ public:
 	~FileReader();
 	
 	int32_t read(void* buf, int32_t count, uint64_t offset) override;
+	uint64_t length() override;
 private:
 	int m_fd;
 };

@@ -22,3 +22,8 @@ int32_t FileReader::read(void* buf, int32_t count, uint64_t offset)
 	
 	return ::pread(m_fd, buf, count, offset);
 }
+
+uint64_t FileReader::length()
+{
+	return ::lseek(m_fd, 0, SEEK_END);
+}

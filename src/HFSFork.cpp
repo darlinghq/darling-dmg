@@ -10,14 +10,32 @@ HFSFork::HFSFork(HFSVolume* vol, const HFSPlusForkData& fork, HFSCatalogNodeID c
 {
 	for (int i = 0; i < 8; i++)
 	{
-		if (m_fork.extents[i].blockCount > 0)
-			m_extents.push_back(&m_fork.extents[i]);
+		auto& elem = m_fork.extents[i];
+		if (elem.blockCount > 0)
+			m_extents.push_back(HFSPlusExtentDescriptor{ be(elem.startBlock), be(elem.blockCount) });
 	}
 }
 
-uint64_t HFSFork::size() const
+uint64_t HFSFork::length()
 {
 	return be(m_fork.logicalSize);
+}
+
+void HFSFork::loadFromOverflowsFile(uint32_t blocksSoFar)
+{
+	const size_t oldCount = m_extents.size();
+
+	if (!m_cnid)
+		throw std::runtime_error("Cannot search extents file, CNID is kHFSNullID");
+
+	if (oldCount > 8)
+		throw std::runtime_error("Loaded extent count > 8, but appropriate extent not found");
+	if (oldCount < 8)
+		throw std::runtime_error("Loaded extent count < 8, but appropriate extent not found");
+
+	m_volume->m_overflowExtents->findExtentsForFile(m_cnid, m_resourceFork, blocksSoFar, m_extents);
+	if (m_extents.size() == oldCount)
+		throw std::runtime_error("Overflow extents not found for given CNID");
 }
 
 int32_t HFSFork::read(void* buf, int32_t count, uint64_t offset)
@@ -45,35 +63,21 @@ int32_t HFSFork::read(void* buf, int32_t count, uint64_t offset)
 		// locate the first extent
 		for (int i = 0; i < m_extents.size(); i++)
 		{
-			if (be(m_extents[i]->blockCount) + blocksSoFar > firstBlock)
+			if (m_extents[i].blockCount + blocksSoFar > firstBlock)
 			{
 				firstExtent = i;
 				firstBlockInFirstExtent = firstBlock - blocksSoFar;
 				break;
 			}
 		
-			blocksSoFar += be(m_extents[i]->blockCount);
+			blocksSoFar += m_extents[i].blockCount;
 		}
 	
-		std::cout << "First extent: " << firstExtent << std::endl;
-		std::cout << "Block: " << firstBlockInFirstExtent << std::endl;
+		//std::cout << "First extent: " << firstExtent << std::endl;
+		//std::cout << "Block: " << firstBlockInFirstExtent << std::endl;
 	
 		if (firstExtent == -1)
-		{
-			const size_t oldCount = m_extents.size();
-
-			if (!m_cnid)
-				throw std::runtime_error("Cannot search extents file, CNID is kHFSNullID");
-
-			if (oldCount > 8)
-				throw std::runtime_error("Loaded extent count > 8, but appropriate extent not found");
-			if (oldCount < 8)
-				throw std::runtime_error("Loaded extent count < 8, but appropriate extent not found");
-
-			m_volume->m_overflowExtents->findExtentsForFile(m_cnid, m_resourceFork, blocksSoFar, m_extents);
-			if (m_extents.size() == oldCount)
-				throw std::runtime_error("Overflow extents not found for given CNID");
-		}
+			loadFromOverflowsFile(blocksSoFar);
 
 	} while(firstExtent == -1);
 	
@@ -81,20 +85,20 @@ int32_t HFSFork::read(void* buf, int32_t count, uint64_t offset)
 	extent = firstExtent;
 	while (read < count)
 	{
-		int32_t thistime = std::min<int32_t>(be(m_extents[extent]->blockCount) * blockSize, count-read);
+		int32_t thistime = std::min<int32_t>(m_extents[extent].blockCount * blockSize, count-read);
 		int32_t reallyRead;
 		uint32_t startBlock;
 		uint64_t volumeOffset;
 		
 		if (extent >= m_extents.size())
-			break; // TODO: we need to read the extents file
+			loadFromOverflowsFile(blocksSoFar);
 		
-		startBlock = be(m_extents[extent]->startBlock);
+		startBlock = m_extents[extent].startBlock;
 		
 		if (extent == firstExtent)
 			startBlock += firstBlockInFirstExtent;
 		
-		std::cout << "Reading from block: " << startBlock << std::endl;
+		//std::cout << "Reading from block: " << startBlock << std::endl;
 		volumeOffset = startBlock * blockSize;
 		
 		if (extent == firstExtent)
@@ -107,6 +111,7 @@ int32_t HFSFork::read(void* buf, int32_t count, uint64_t offset)
 		if (reallyRead != thistime)
 			break;
 		
+		blocksSoFar += m_extents[extent].blockCount;
 		extent++;
 	}
 	

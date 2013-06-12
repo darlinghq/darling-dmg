@@ -16,7 +16,6 @@ public:
 	
 	void usage(uint64_t& totalBytes, uint64_t& freeBytes) const;
 	HFSCatalogBTree* rootCatalogTree();
-	HFSFork* openFile(const std::string& path, bool resourceFork = false);
 private:
 	Reader* m_reader;
 	HFSExtentsOverflowBTree* m_overflowExtents;

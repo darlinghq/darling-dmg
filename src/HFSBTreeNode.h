@@ -2,6 +2,7 @@
 #define HFSBTREENODE_H
 #include "hfsplus.h"
 #include "be.h"
+#include <iostream>
 
 class HFSBTreeNode
 {
@@ -18,9 +19,11 @@ public:
 	}
 	
 	HFSBTreeNode(void* tree, uint32_t nodeIndex, uint16_t nodeSize)
+	: m_nodeSize(nodeSize)
 	{
-		BTNodeDescriptor* nodeDescriptor = reinterpret_cast<BTNodeDescriptor*>(((char*)tree) + nodeSize*nodeIndex);
-		HFSBTreeNode(nodeDescriptor, nodeSize);
+		m_descriptor = reinterpret_cast<BTNodeDescriptor*>(((char*)tree) + nodeSize*nodeIndex);
+		//std::cout << "Node descriptor for node " << nodeIndex << " is at " << nodeDescriptor << ", size " << nodeSize << std::endl;
+		m_firstRecordOffset = reinterpret_cast<uint16_t*>(descPtr() + m_nodeSize - sizeof(uint16_t));
 	}
 	
 	NodeKind kind() const

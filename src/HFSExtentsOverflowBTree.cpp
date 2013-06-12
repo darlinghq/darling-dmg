@@ -7,7 +7,7 @@ HFSExtentsOverflowBTree::HFSExtentsOverflowBTree(HFSFork* fork)
 {
 }
 
-void HFSExtentsOverflowBTree::findExtentsForFile(HFSCatalogNodeID cnid, bool resourceFork, uint32_t startBlock, std::vector<const HFSPlusExtentDescriptor*>& extraExtents)
+void HFSExtentsOverflowBTree::findExtentsForFile(HFSCatalogNodeID cnid, bool resourceFork, uint32_t startBlock, std::vector<HFSPlusExtentDescriptor>& extraExtents)
 {
 	HFSPlusExtentKey key;
 	std::vector<HFSBTreeNode> leaves;
@@ -45,7 +45,7 @@ void HFSExtentsOverflowBTree::findExtentsForFile(HFSCatalogNodeID cnid, bool res
 				if (!extents[x].blockCount)
 					break;
 
-				extraExtents.push_back(extents + i);
+				extraExtents.push_back(HFSPlusExtentDescriptor{ be(extents[x].startBlock), be(extents[x].blockCount) });
 			}
 		}
 	}

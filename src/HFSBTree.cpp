@@ -12,9 +12,9 @@ HFSBTree::HFSBTree(HFSFork* fork)
 {
 	BTNodeDescriptor desc0;
 	
-	std::cout << "Tree size: " << fork->size() << std::endl;
-	m_tree = new char[fork->size()];
-	fork->read(m_tree, fork->size(), 0);
+	//std::cout << "Tree size: " << fork->length() << std::endl;
+	m_tree = new char[fork->length()];
+	fork->read(m_tree, fork->length(), 0);
 	
 	memcpy(&desc0, m_tree, sizeof(desc0));
 	
@@ -44,6 +44,8 @@ std::vector<HFSBTreeNode> HFSBTree::findLeafNodes(const Key* indexKey, KeyCompar
 
 	if (current.isInvalid())
 		return rv;
+	
+	rv.push_back(current);
 
 	while (current.forwardLink() != 0)
 	{
@@ -70,26 +72,50 @@ HFSBTreeNode HFSBTree::traverseTree(int nodeIndex, const Key* indexKey, KeyCompa
 	{
 		case NodeKind::kBTIndexNode:
 		{
+			int position;
+			uint32_t* childIndex;
+			
+			/*
 			int position = node.recordCount() / 2;
 			int distance = position;
 			uint32_t* childIndex;
 			Key* key;
 
 			// binary search for the next node
-			while (distance > 1)
+			while (distance >= 1)
 			{
 				key = node.getRecordKey<Key>(position);
+				std::cout << "Checking key in index node " << nodeIndex << " at pos " << position << std::endl;
 
 				distance /= 2;
+				std::cout << "\tcur distance = " << distance << std::endl;
 
 				if (comp(key, indexKey))
-					position -= distance;
-				else
+				{
+					std::cout << "comp() = true\n";
 					position += distance;
+				}
+				else
+				{
+					std::cout << "comp() = false\n";
+					position -= distance;
+				}
 			}
-
+			*/
+			
+			for (position = int(node.recordCount())-1; position >= 0; position--)
+			{
+				Key* key = node.getRecordKey<Key>(position);
+				if (comp(key, indexKey))
+					break;
+			}
+			
+			if (position < 0)
+				return HFSBTreeNode();
+			
 			// recurse down
 			childIndex = node.getRecordData<uint32_t>(position);
+			
 			return traverseTree(be(*childIndex), indexKey, comp);
 		}
 		case NodeKind::kBTLeafNode:

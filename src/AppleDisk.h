@@ -2,22 +2,17 @@
 #define APPLEDISK_H
 #include "apm.h"
 #include "Reader.h"
+#include "PartitionedDisk.h"
 #include <string>
 #include <vector>
 
-class AppleDisk
+class AppleDisk : public PartitionedDisk
 {
 public:
 	AppleDisk(Reader* reader);
 	
-	struct Partition
-	{
-		std::string name, type;
-		uint64_t offset, size; // in byte
-	};
-	
-	const std::vector<Partition>& partitions() const { return m_partitions; }
-	Reader* readerForPartition(unsigned int index);
+	virtual const std::vector<Partition>& partitions() const override { return m_partitions; }
+	virtual Reader* readerForPartition(unsigned int index) override;
 private:
 	Reader* m_reader;
 	Block0 m_block0;

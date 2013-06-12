@@ -30,14 +30,10 @@ void HFSVolume::usage(uint64_t& totalBytes, uint64_t& freeBytes) const
 
 HFSCatalogBTree* HFSVolume::rootCatalogTree()
 {
-	HFSFork* fork = new HFSFork(this, m_header.catalogFile);
-	HFSCatalogBTree* btree = new HFSCatalogBTree(fork);
+	HFSFork* fork = new HFSFork(this, m_header.catalogFile, kHFSCatalogFileID);
+	HFSCatalogBTree* btree = new HFSCatalogBTree(fork, this);
 	
 	return btree;
 }
 
-HFSFork* HFSVolume::openFile(const std::string& path, bool resourceFork)
-{
-	return nullptr;
-}
 
