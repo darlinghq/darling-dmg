@@ -110,6 +110,12 @@ struct BTNodeDescriptor
 	uint16_t reserved;
 };
 
+enum class KeyCompareType : uint8_t
+{
+	kHFSCaseFolding = 0xCF,
+	kHFSBinaryCompare = 0xBC
+};
+
 struct BTHeaderRec
 {
 	uint16_t treeDepth;
@@ -124,7 +130,7 @@ struct BTHeaderRec
 	uint16_t reserved1;
 	uint32_t clumpSize;	  // misaligned
 	uint8_t btreeType;
-	uint8_t keyCompareType;
+	KeyCompareType keyCompareType;
 	uint32_t attributes;	 // long aligned again
 	uint32_t reserved3[16];
 };

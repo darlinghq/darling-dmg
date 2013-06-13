@@ -16,6 +16,8 @@ public:
 	
 	void usage(uint64_t& totalBytes, uint64_t& freeBytes) const;
 	HFSCatalogBTree* rootCatalogTree();
+
+	bool isHFSX() const;
 private:
 	Reader* m_reader;
 	HFSExtentsOverflowBTree* m_overflowExtents;

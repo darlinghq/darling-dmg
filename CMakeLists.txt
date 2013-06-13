@@ -1,4 +1,4 @@
-project(darling-hfsplus)
+project(darling-dmg)
 
 cmake_minimum_required(VERSION 2.8)
 
@@ -13,9 +13,10 @@ include(FindLibxml2)
 find_package(Libxml2 REQUIRED)
 include_directories(${LIBXML2_INCLUDE_DIR})
 
-add_executable(darling-hfsplus
+add_executable(darling-dmg
 	#src/main-test-hfs+.cpp
-	src/main-test-dmg.cpp
+	#src/main-test-dmg.cpp
+	src/main-fuse.cpp
 	
 	src/unichar.cpp
 	src/FileReader.cpp
@@ -31,8 +32,10 @@ add_executable(darling-hfsplus
 	src/DMGPartition.cpp
 	src/DMGDecompressor.cpp
 	src/adc.cpp
+	
+	src/MacBinary.cpp
 )
 
-target_link_libraries(darling-hfsplus -licuuc -lssl -lz -lbz2 -lfuse ${LIBXML2_LIBRARY})
-install(TARGETS darling-hfsplus RUNTIME DESTINATION bin)
+target_link_libraries(darling-dmg -licuuc -lssl -lz -lbz2 -lfuse ${LIBXML2_LIBRARY})
+install(TARGETS darling-dmg RUNTIME DESTINATION bin)
 

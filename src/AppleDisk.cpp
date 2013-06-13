@@ -33,6 +33,13 @@ AppleDisk::AppleDisk(Reader* reader)
 	}
 }
 
+bool AppleDisk::isAppleDisk(Reader* reader)
+{
+	decltype(Block0::sbSig) sig = 0;
+	reader->read(&sig, sizeof(sig), 0);
+	return be(sig) == BLOCK0_SIGNATURE;
+}
+
 Reader* AppleDisk::readerForPartition(unsigned int index)
 {
 	const Partition& part = m_partitions.at(index);

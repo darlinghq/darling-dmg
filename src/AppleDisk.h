@@ -13,6 +13,8 @@ public:
 	
 	virtual const std::vector<Partition>& partitions() const override { return m_partitions; }
 	virtual Reader* readerForPartition(unsigned int index) override;
+
+	static bool isAppleDisk(Reader* reader);
 private:
 	Reader* m_reader;
 	Block0 m_block0;

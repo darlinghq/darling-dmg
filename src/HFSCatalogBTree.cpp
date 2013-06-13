@@ -13,6 +13,11 @@ HFSCatalogBTree::HFSCatalogBTree(HFSFork* fork, HFSVolume* volume)
 {
 }
 
+bool HFSCatalogBTree::isCaseSensitive() const
+{
+	return m_volume->isHFSX() && m_header.keyCompareType == KeyCompareType::kHFSBinaryCompare;
+}
+
 bool HFSCatalogBTree::caseInsensitiveComparator(const Key* indexKey, const Key* desiredKey)
 {
 	const HFSPlusCatalogKey* catIndexKey = reinterpret_cast<const HFSPlusCatalogKey*>(indexKey);
@@ -36,6 +41,24 @@ bool HFSCatalogBTree::caseInsensitiveComparator(const Key* indexKey, const Key* 
 		//std::cout << "Rejected, desired: " << des << " - index: " << idx << std::endl;
 		return false;
 	}
+
+	return true;
+}
+
+bool HFSCatalogBTree::caseSensitiveComparator(const Key* indexKey, const Key* desiredKey)
+{
+	const HFSPlusCatalogKey* catIndexKey = reinterpret_cast<const HFSPlusCatalogKey*>(indexKey);
+	const HFSPlusCatalogKey* catDesiredKey = reinterpret_cast<const HFSPlusCatalogKey*>(desiredKey);
+	UnicodeString desiredName, indexName;
+
+	if (catDesiredKey->parentID < be(catIndexKey->parentID))
+		return false;
+
+	desiredName = UnicodeString((char*)catDesiredKey->nodeName.string, catDesiredKey->nodeName.length*2, "UTF-16BE");
+	indexName = UnicodeString((char*)catIndexKey->nodeName.string, be(catIndexKey->nodeName.length)*2, "UTF-16BE");
+
+	if (desiredName.length() > 0 && desiredName.compare(indexName) < 0 && catDesiredKey->parentID < be(catIndexKey->parentID))
+		return false;
 
 	return true;
 }
@@ -130,7 +153,7 @@ int HFSCatalogBTree::stat(std::string path, HFSPlusCatalogFileOrFolder* s, bool 
 
 		desiredKey.parentID = parentID;
 
-		leafNode = findLeafNode((Key*) &desiredKey, caseInsensitiveComparator);
+		leafNode = findLeafNode((Key*) &desiredKey, isCaseSensitive() ? caseSensitiveComparator : caseInsensitiveComparator);
 		if (leafNode.isInvalid())
 			return -ENOENT;
 
@@ -203,9 +226,18 @@ void HFSCatalogBTree::findRecordForParentAndName(const HFSBTreeNode& leafNode, H
 			case RecordType::kHFSPlusFileRecord:
 			{
 				// skip "\0\0HFS+ Private Data"
-				if (recordKey->nodeName.string[0] != 0)
+				if (recordKey->nodeName.string[0] != 0 && be(recordKey->parentID) == cnid)
 				{
-					if (be(recordKey->parentID) == cnid && (name.empty() || EqualNoCase(recordKey->nodeName, name)))
+					bool equal = name.empty();
+					if (!equal)
+					{
+						if (isCaseSensitive())
+							equal = EqualCase(recordKey->nodeName, name);
+						else
+							equal = EqualNoCase(recordKey->nodeName, name);
+					}
+
+					if (equal)
 					{
 						std::string name = UnicharToString(recordKey->nodeName);
 						result[name] = ff;

@@ -33,6 +33,15 @@ DMGDisk::~DMGDisk()
 	xmlFreeDoc(m_kolyXML);
 }
 
+bool DMGDisk::isDMG(Reader* reader)
+{
+	uint64_t offset = reader->length() - 512;
+	decltype(UDIFResourceFile::fUDIFSignature) sig = 0;
+
+	reader->read(&sig, sizeof(sig), offset);
+	return be(sig) == UDIF_SIGNATURE;
+}
+
 void DMGDisk::loadKoly(const UDIFResourceFile& koly)
 {
 	std::unique_ptr<char[]> xmlData;
@@ -147,20 +156,18 @@ BLKXTable* DMGDisk::loadBLKXTableForPartition(unsigned int index)
 bool DMGDisk::base64Decode(const std::string& input, std::vector<uint8_t>& output)
 {
 	BIO *b64, *bmem;
-	char buffer[512];
+	std::unique_ptr<char[]> buffer(new char[input.length()]);
 	int rd;
 
 	b64 = BIO_new(BIO_f_base64());
 	bmem = BIO_new_mem_buf((void*) input.c_str(), input.length());
 	bmem = BIO_push(b64, bmem);
-
-	do
-	{
-		int rd = BIO_read(bmem, buffer, sizeof(buffer));
-		if (rd > 0)
-			output.insert(output.end(), buffer, &buffer[rd]);
-	}
-	while (rd > 0);
+	//BIO_set_flags(bmem, BIO_FLAGS_BASE64_NO_NL);
+	
+	rd = BIO_read(bmem, buffer.get(), input.length());
+	
+	if (rd > 0)
+		output.assign(buffer.get(), buffer.get()+rd);
 
 	BIO_free_all(bmem);
 	return rd >= 0;

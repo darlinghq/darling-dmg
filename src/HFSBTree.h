@@ -33,7 +33,7 @@ public:
 protected:
 	HFSBTreeNode traverseTree(int nodeIndex, const Key* indexKey, KeyComparator comp);
 	void walkTree(int nodeIndex);
-private:
+protected:
 	HFSFork* m_fork;
 	char* m_tree;
 	BTHeaderRec m_header;

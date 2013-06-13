@@ -16,7 +16,7 @@ int main(int argc, char** argv)
 	
 	for (int i = 0; i < parts.size(); i++)
 	{
-		if (parts[i].type == "Apple_HFS")
+		if (parts[i].type == "Apple_HFS") // TODO: Apple_HFSX
 		{
 			partReader = adisk->readerForPartition(i);
 			break;

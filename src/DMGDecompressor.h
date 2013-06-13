@@ -2,16 +2,23 @@
 #define DMGDECOMPRESSOR_H
 #include <stdint.h>
 #include "dmg.h"
+#include "Reader.h"
 
 class DMGDecompressor
 {
 protected:
-	DMGDecompressor() {}
+	DMGDecompressor(Reader* reader);
+	int readSome(char** ptr);
+	void processed(int bytes);
 public:
 	virtual ~DMGDecompressor() {}
-	virtual int32_t decompress(const void* input, int32_t inputBytes, void* output, int32_t outputBytes) = 0;
+	virtual int32_t decompress(void* output, int32_t outputBytes) = 0;
 	
-	static DMGDecompressor* create(RunType runType);
+	static DMGDecompressor* create(RunType runType, Reader* reader);
+private:
+	Reader* m_reader;
+	uint16_t m_pos;
+	char m_buf[512];
 };
 
 #endif

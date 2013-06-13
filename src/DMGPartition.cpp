@@ -5,6 +5,9 @@
 #include "DMGDecompressor.h"
 #include <memory>
 #include <algorithm>
+//#include <cstdio>
+#include <iostream>
+#include "SubReader.h"
 
 static const int SECTOR_SIZE = 512;
 
@@ -18,6 +21,7 @@ DMGPartition::DMGPartition(Reader* disk, BLKXTable* table)
 			continue;
 		
 		m_sectors[be(m_table->runs[i].sectorStart)] = i;
+		// printf("Sector %d has type 0x%x, starts at byte %d\n", i, type, be(m_table->runs[i].sectorStart)*512);
 	}
 }
 
@@ -43,7 +47,7 @@ int32_t DMGPartition::read(void* buf, int32_t count, uint64_t offset)
 		itRun--; // move to the sector we want to read
 		
 		if (!done)
-			offsetInSector = itRun->first*SECTOR_SIZE - offset;
+			offsetInSector = offset - itRun->first*SECTOR_SIZE;
 		
 		done += readRun(((char*)buf) + done, itRun->second, offsetInSector, count-done);
 	}
@@ -61,33 +65,43 @@ int32_t DMGPartition::readRun(void* buf, int32_t runIndex, uint64_t offsetInSect
 			memset(buf, 0, count);
 			return count;
 		case RunType::Raw:
-			return m_disk->read(buf, count, be(run->compOffset));
+			return m_disk->read(buf, count, be(run->compOffset) + be(m_table->dataStart));
 		case RunType::Zlib:
 		case RunType::Bzip2:
 		case RunType::ADC:
 		{
 			std::unique_ptr<DMGDecompressor> decompressor;
-			std::unique_ptr<char[]> rdbuf;
-			uint32_t done = 0, inpos = 0;
+			std::unique_ptr<Reader> subReader;
+			uint32_t done = 0;
 			
-			decompressor.reset(DMGDecompressor::create(runType));
+			subReader.reset(new SubReader(m_disk, be(run->compOffset), be(run->compLength)));
+			decompressor.reset(DMGDecompressor::create(runType, subReader.get()));
 			
 			if (!decompressor)
 				throw std::logic_error("DMGDecompressor::create() returned nullptr!");
 			
-			rdbuf.reset(new char[512]);
-			
 			while (done < count)
 			{
-				int32_t toRead = std::min<int32_t>(be(run->compLength)-inpos, 512);
-				int32_t read = m_disk->read(rdbuf.get(), toRead, be(run->compOffset) + inpos);
 				int32_t dec;
 				
-				dec = decompressor->decompress(rdbuf.get(), read, ((char*)buf)+done, count-done);
+				if (offsetInSector > 0)
+				{
+					std::unique_ptr<char[]> waste(new char[offsetInSector]);
+					dec = decompressor->decompress(waste.get(), offsetInSector);
+				}
+				else
+					dec = decompressor->decompress(((char*)buf)+done, count-done);
+				// std::cout << "Decompressor returned " << dec << std::endl;
 				
 				if (dec < 0)
-					throw std::runtime_error("Error inflating stream");
-				done += dec;
+					throw std::runtime_error("Error decompressing stream");
+				else if (dec == 0)
+					break;
+				
+				if (offsetInSector > 0)
+					offsetInSector -= dec;
+				else
+					done += dec;
 			}
 			
 			return done;

@@ -6,6 +6,7 @@
 
 std::string UnicharToString(uint16_t length, const unichar* string);
 bool EqualNoCase(const HFSString& str1, const std::string& str2);
+bool EqualCase(const HFSString& str1, const std::string& str2);
 
 inline std::string UnicharToString(const HFSString& str) { return UnicharToString(be(str.length), str.string); }
 

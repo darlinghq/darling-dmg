@@ -14,7 +14,8 @@ HFSBTree::HFSBTree(HFSFork* fork)
 	
 	//std::cout << "Tree size: " << fork->length() << std::endl;
 	m_tree = new char[fork->length()];
-	fork->read(m_tree, fork->length(), 0);
+	if (fork->read(m_tree, fork->length(), 0) != fork->length())
+		throw std::runtime_error("Failed to read the BTree header");
 	
 	memcpy(&desc0, m_tree, sizeof(desc0));
 	
@@ -76,35 +77,7 @@ HFSBTreeNode HFSBTree::traverseTree(int nodeIndex, const Key* indexKey, KeyCompa
 		{
 			int position;
 			uint32_t* childIndex;
-			
-			/*
-			int position = node.recordCount() / 2;
-			int distance = position;
-			uint32_t* childIndex;
-			Key* key;
 
-			// binary search for the next node
-			while (distance >= 1)
-			{
-				key = node.getRecordKey<Key>(position);
-				std::cout << "Checking key in index node " << nodeIndex << " at pos " << position << std::endl;
-
-				distance /= 2;
-				std::cout << "\tcur distance = " << distance << std::endl;
-
-				if (comp(key, indexKey))
-				{
-					std::cout << "comp() = true\n";
-					position += distance;
-				}
-				else
-				{
-					std::cout << "comp() = false\n";
-					position -= distance;
-				}
-			}
-			*/
-			
 			for (position = int(node.recordCount())-1; position >= 0; position--)
 			{
 				Key* key = node.getRecordKey<Key>(position);

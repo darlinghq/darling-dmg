@@ -14,6 +14,8 @@ public:
 
 	virtual const std::vector<Partition>& partitions() const { return m_partitions; }
 	virtual Reader* readerForPartition(unsigned int index);
+
+	static bool isDMG(Reader* reader);
 private:
 	void loadKoly(const UDIFResourceFile& koly);
 	void loadPartitionElements(xmlXPathContextPtr xpathContext, xmlNodeSetPtr nodes);

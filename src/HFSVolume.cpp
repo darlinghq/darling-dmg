@@ -22,6 +22,11 @@ HFSVolume::~HFSVolume()
 	delete m_overflowExtents;
 }
 
+bool HFSVolume::isHFSX() const
+{
+	return be(m_header.signature) == HFSX_SIGNATURE;
+}
+
 void HFSVolume::usage(uint64_t& totalBytes, uint64_t& freeBytes) const
 {
 	totalBytes = be(m_header.blockSize) * be(m_header.totalBlocks);
