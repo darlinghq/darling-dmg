@@ -14,6 +14,7 @@ class DMGDecompressor_Zlib : public DMGDecompressor
 public:
 	DMGDecompressor_Zlib(Reader* reader);
 	~DMGDecompressor_Zlib();
+	void reinit();
 	virtual int32_t decompress(void* output, int32_t outputBytes) override;
 private:
 	z_stream m_strm;
@@ -59,7 +60,9 @@ DMGDecompressor* DMGDecompressor::create(RunType runType, Reader* reader)
 int DMGDecompressor::readSome(char** ptr)
 {
 	*ptr = m_buf;
-	return m_reader->read(m_buf, sizeof(m_buf), m_pos);
+	int rd = m_reader->read(m_buf, sizeof(m_buf), m_pos);
+	
+	return rd;
 }
 
 void DMGDecompressor::processed(int bytes)
@@ -80,6 +83,16 @@ DMGDecompressor_Zlib::~DMGDecompressor_Zlib()
 	inflateEnd(&m_strm);
 }
 
+/*
+void DMGDecompressor_Zlib::reinit()
+{
+	inflateEnd(&m_strm);
+	memset(&m_strm, 0, sizeof(m_strm));
+	if (inflateInit(&m_strm) != Z_OK)
+		throw std::bad_alloc();
+}
+*/
+
 int32_t DMGDecompressor_Zlib::decompress(void* output, int32_t outputBytes)
 {
 	int status;
@@ -93,11 +106,23 @@ int32_t DMGDecompressor_Zlib::decompress(void* output, int32_t outputBytes)
 	m_strm.avail_in = inputBytes;
 	m_strm.avail_out = outputBytes;
 	
-	status = inflate(&m_strm, Z_NO_FLUSH);
+	std::cout << "ZLIB decompressor supplying " << inputBytes << " bytes\n";
+	std::cout << "Buffer is at " << (void*)m_strm.next_in << std::endl;
+	
+	status = inflate(&m_strm, Z_SYNC_FLUSH);
 	if (status == Z_OK || status == Z_STREAM_END)
 	{
+		std::cout << m_strm.avail_in << " bytes left\n";
+		std::cout << "next_in = " << (void*)m_strm.next_in << std::endl;
+		std::cout << "status = " << status << std::endl;
+		
+		int32_t done = outputBytes - m_strm.avail_out;
+		
 		processed(inputBytes - m_strm.avail_in);
-		return outputBytes - m_strm.avail_out;
+		// if (status == Z_STREAM_END)
+		// 	reinit();
+		
+		return done;
 	}
 	else
 		return status;

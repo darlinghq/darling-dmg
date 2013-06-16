@@ -269,6 +269,7 @@ void HFSCatalogBTree::fixEndian(HFSPlusCatalogFileOrFolder& ff)
 	swap(reserved);
 	swap(permissions.ownerID);
 	swap(permissions.groupID);
+	swap(permissions.fileMode);
 	//swap(permissions.adminFlags);
 	//swap(permissions.ownerFlags);
 	swap(permissions.special.rawDevice);

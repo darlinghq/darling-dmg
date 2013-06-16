@@ -1,6 +1,7 @@
 #ifndef HFSVOLUME_H
 #define HFSVOLUME_H
 #include "hfsplus.h"
+#include "hfs.h"
 #include "Reader.h"
 #include <string>
 
@@ -18,8 +19,13 @@ public:
 	HFSCatalogBTree* rootCatalogTree();
 
 	bool isHFSX() const;
+	
+	static bool isHFSPlus(Reader* reader);
+private:
+	void processEmbeddedHFSPlus(HFSMasterDirectoryBlock* block);
 private:
 	Reader* m_reader;
+	Reader* m_embeddedReader;
 	HFSExtentsOverflowBTree* m_overflowExtents;
 	HFSPlusVolumeHeader m_header;
 	

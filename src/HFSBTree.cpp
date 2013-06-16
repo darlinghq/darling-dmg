@@ -27,12 +27,10 @@ HFSBTree::HFSBTree(HFSFork* fork)
 	std::cout << "leaf records: " << be(m_header.leafRecords) << std::endl;
 	std::cout << "node size: " << be(m_header.nodeSize) << std::endl;
 	
-	/*
-	if (m_header.rootNode)
+	/*if (m_header.rootNode)
 	{
 		walkTree(be(m_header.rootNode));
-	}
-	*/
+	}*/
 }
 
 HFSBTreeNode HFSBTree::findLeafNode(const Key* indexKey, KeyComparator comp)
@@ -197,8 +195,7 @@ void HFSBTree::walkTree(int nodeIndex)
 			std::cout << "Node " << nodeIndex << " is a map node\n";
 			break;
 	}
-}
-*/
+}*/
 
 HFSBTree::~HFSBTree()
 {

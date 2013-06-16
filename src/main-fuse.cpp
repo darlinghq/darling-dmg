@@ -1,6 +1,4 @@
-#define FUSE_USE_VERSION 26
-
-#include <fuse.h>
+#include "main-fuse.h"
 #include <cstring>
 #include <iostream>
 #include <cstdio>
@@ -13,17 +11,7 @@
 #include "DMGDisk.h"
 #include "FileReader.h"
 
-static void showHelp(const char* argv0);
-static void openDisk(const char* path);
-
-int hfs_getattr(const char* path, struct stat* stat);
-int hfs_readlink(const char* path, char* buf, size_t size);
-int hfs_open(const char* path, struct fuse_file_info* info);
-int hfs_read(const char* path, char* buf, size_t bytes, off_t offset, struct fuse_file_info* info);
-int hfs_release(const char* path, struct fuse_file_info* info);
-int hfs_opendir(const char* path, struct fuse_file_info* info);
-int hfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info* info);
-int hfs_releasedir(const char* path, struct fuse_file_info* info);
+static const char* RESOURCE_FORK_SUFFIX = "#..namedfork#rsrc";
 
 Reader* g_fileReader;
 PartitionedDisk* g_partitions;
@@ -32,49 +20,56 @@ HFSCatalogBTree* g_tree;
 
 int main(int argc, char** argv)
 {
-	struct fuse_operations ops;
-	char* args[5];
+	char** args = nullptr;
+	int argi, rv;
 	
-	if (argc != 3)
+	try
 	{
-		showHelp(argv[0]);
-		return 1;
+		struct fuse_operations ops;
+	
+		if (argc < 3)
+		{
+			showHelp(argv[0]);
+			return 1;
+		}
+	
+		openDisk(argv[1]);
+	
+		memset(&ops, 0, sizeof(ops));
+	
+		ops.getattr = hfs_getattr;
+		ops.open = hfs_open;
+		ops.read = hfs_read;
+		ops.release = hfs_release;
+		ops.opendir = hfs_opendir;
+		ops.readdir = hfs_readdir;
+		ops.readlink = hfs_readlink;
+		ops.releasedir = hfs_releasedir;
+	
+		args = new char*[argc+1];
+		args[0] = argv[0];
+		args[1] = argv[2];
+		args[2] = (char*) "-oro";
+	
+		for (argi = 3; argi < argc; argi++)
+			args[argi] = argv[argi];
+	
+		args[argi] = nullptr;
+	
+		rv = fuse_main(argc, args, &ops, 0);
+	}
+	catch (const std::exception& e)
+	{
+		std::cerr << "Error: " << e.what() << std::endl;
+		rv = 1;
 	}
 	
-	openDisk(argv[1]);
-	
-	memset(&ops, 0, sizeof(ops));
-	
-	ops.getattr = hfs_getattr;
-	ops.open = hfs_open;
-	ops.read = hfs_read;
-	ops.release = hfs_release;
-	ops.opendir = hfs_opendir;
-	ops.readdir = hfs_readdir;
-	ops.readlink = hfs_readlink;
-	ops.releasedir = hfs_releasedir;
-	
-	args[0] = argv[0];
-	args[1] = argv[2];
-	args[2] = "-oro";
-	args[3] = "-d";
-	args[4] = 0;
-	
-	return fuse_main(4, args, &ops, 0);
-	
-	/*
-	HfsplusVolume* vol = HfsplusVolume::openDMGFile(argv[1]);
-	HfsplusDirectory* dir = vol->openDirectory("/Evernote.app/Contents/MacOS");
-	struct dirent ent;
-	
-	while (dir->next(&ent))
-	{
-		std::cout << ent.d_name << ' ' << int(ent.d_type) << std::endl;
-	}
-	
-	delete dir;
-	delete vol;
-	*/
+	delete g_tree;
+	delete g_volume;
+	delete g_partitions;
+	delete g_fileReader;
+	delete [] args;
+	return rv;
 }
 
 void openDisk(const char* path)
@@ -87,33 +82,42 @@ void openDisk(const char* path)
 		g_partitions = new DMGDisk(g_fileReader);
 	else if (AppleDisk::isAppleDisk(g_fileReader))
 		g_partitions = new AppleDisk(g_fileReader);
+	else if (HFSVolume::isHFSPlus(g_fileReader))
+		g_volume = new HFSVolume(g_fileReader);
 	else
 		throw std::runtime_error("Unsupported file format");
 
-	const std::vector<PartitionedDisk::Partition>& parts = g_partitions->partitions();
-
-	for (size_t i = 0; i < parts.size(); i++)
+	if (g_partitions)
 	{
-		if (parts[i].type == "Apple_HFS" || parts[i].type == "Apple_HFSX")
+		const std::vector<PartitionedDisk::Partition>& parts = g_partitions->partitions();
+
+		for (size_t i = 0; i < parts.size(); i++)
 		{
-			partIndex = i;
-			break;
+			if (parts[i].type == "Apple_HFS" || parts[i].type == "Apple_HFSX")
+			{
+				std::cout << "Using partition #" << i << " of type " << parts[i].type << std::endl;
+				partIndex = i;
+				break;
+			}
 		}
+
+		if (partIndex == -1)
+			throw std::runtime_error("No suitable partition found in file");
+
+		g_volume = new HFSVolume(g_partitions->readerForPartition(partIndex));
 	}
-
-	if (partIndex == -1)
-		throw std::runtime_error("No suitable partition found in file");
-
-	g_volume = new HFSVolume(g_partitions->readerForPartition(partIndex));
+	
 	g_tree = g_volume->rootCatalogTree();
 }
 
 void showHelp(const char* argv0)
 {
-	std::cerr << "Usage: " << argv0 << " <dmg-file> <mount-point>\n";
+	std::cerr << "Usage: " << argv0 << " <file> <mount-point> [fuse args]\n\n";
+	std::cerr << ".DMG files and raw disk images can be mounted.\n";
+	std::cerr << argv0 << " auttomatically selects the first HFS+/HFSX partition.\n";
 }
 
-static void hfs_nativeToStat(const HFSPlusCatalogFileOrFolder& ff, struct stat* stat)
+static void hfs_nativeToStat(const HFSPlusCatalogFileOrFolder& ff, struct stat* stat, bool resourceFork = false)
 {
 	memset(stat, 0, sizeof(*stat));
 
@@ -123,23 +127,67 @@ static void hfs_nativeToStat(const HFSPlusCatalogFileOrFolder& ff, struct stat* 
 	stat->st_mode = ff.file.permissions.fileMode;
 	stat->st_uid = ff.file.permissions.ownerID;
 	stat->st_gid = ff.file.permissions.groupID;
+	stat->st_ino = ff.file.fileID;
+	stat->st_blksize = 512;
+	stat->st_nlink = 1;
 
 	if (ff.file.recordType == RecordType::kHFSPlusFileRecord)
 	{
-		stat->st_size = ff.file.dataFork.logicalSize;
-		stat->st_blocks = ff.file.dataFork.totalBlocks;
+		if (!resourceFork)
+		{
+			stat->st_size = ff.file.dataFork.logicalSize;
+			stat->st_blocks = ff.file.dataFork.totalBlocks;
+		}
+		else
+		{
+			stat->st_size = ff.file.resourceFork.logicalSize;
+			stat->st_blocks = ff.file.resourceFork.totalBlocks;
+		}
+		
 		if (S_ISCHR(stat->st_mode) || S_ISBLK(stat->st_mode))
 			stat->st_rdev = ff.file.permissions.special.rawDevice;
 	}
+	
+	if (!stat->st_mode)
+	{
+		if (ff.file.recordType == RecordType::kHFSPlusFileRecord)
+		{
+			stat->st_mode = S_IFREG;
+			stat->st_mode |= 0444;
+		}
+		else
+		{
+			stat->st_mode = S_IFDIR;
+			stat->st_mode |= 0555;
+		}
+	}
+}
+
+static bool string_endsWith(const std::string& str, const std::string& what)
+{
+	if (str.size() < what.size())
+		return false;
+	else
+		return str.compare(str.size()-what.size(), what.size(), what) == 0;
 }
 
 int hfs_getattr(const char* path, struct stat* stat)
 {
 	HFSPlusCatalogFileOrFolder ff;
-	int rv = g_tree->stat(path, &ff);
+	std::string spath = path;
+	int rv;
+	bool resourceFork = false;
+	
+	if (string_endsWith(path, RESOURCE_FORK_SUFFIX))
+	{
+		spath.resize(spath.length() - strlen(RESOURCE_FORK_SUFFIX));
+		resourceFork = true;
+	}
+	
+	rv = g_tree->stat(spath.c_str(), &ff);
 
 	if (rv == 0)
-		hfs_nativeToStat(ff, stat);
+		hfs_nativeToStat(ff, stat, resourceFork);
 
 	return rv;
 }
@@ -161,7 +209,17 @@ int hfs_readlink(const char* path, char* buf, size_t size)
 int hfs_open(const char* path, struct fuse_file_info* info)
 {
 	Reader* file;
-	int rv = g_tree->openFile(path, &file);
+	std::string spath = path;
+	int rv;
+	bool resourceFork = false;
+	
+	if (string_endsWith(path, RESOURCE_FORK_SUFFIX))
+	{
+		spath.resize(spath.length() - strlen(RESOURCE_FORK_SUFFIX));
+		resourceFork = true;
+	}
+	
+	rv = g_tree->openFile(spath.c_str(), &file, resourceFork);
 
 	if (rv == 0)
 		info->fh = uint64_t(file);
@@ -197,17 +255,35 @@ int hfs_opendir(const char* path, struct fuse_file_info* info)
 	return rv;
 }
 
+void processResourceForks(std::map<std::string, HFSPlusCatalogFileOrFolder>& contents)
+{
+	for (auto it = contents.begin(); it != contents.end(); it++)
+	{
+		if (it->second.file.recordType == RecordType::kHFSPlusFileRecord
+			&& !string_endsWith(it->first, RESOURCE_FORK_SUFFIX))
+		{
+			if (it->second.file.resourceFork.logicalSize > 0)
+			{
+				std::string rsrcForkName = it->first + RESOURCE_FORK_SUFFIX;
+				contents[rsrcForkName] = it->second;
+			}
+		}
+	}
+}
+
 int hfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info* info)
 {
 	std::map<std::string, HFSPlusCatalogFileOrFolder> contents;
 	int rv = g_tree->listDirectory(path, contents);
+	
+	processResourceForks(contents);
 
 	if (rv == 0)
 	{
 		for (auto it = contents.begin(); it != contents.end(); it++)
 		{
 			struct stat st;
-			hfs_nativeToStat(it->second, &st);
+			hfs_nativeToStat(it->second, &st, string_endsWith(it->first, RESOURCE_FORK_SUFFIX));
 
 			if (filler(buf, it->first.c_str(), &st, 0) != 0)
 				return -ENOMEM;

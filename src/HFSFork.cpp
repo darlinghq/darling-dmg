@@ -47,10 +47,10 @@ int32_t HFSFork::read(void* buf, int32_t count, uint64_t offset)
 	int firstBlockInFirstExtent;
 	uint32_t read = 0;
 	
-	if (offset > m_fork.logicalSize)
+	if (offset > be(m_fork.logicalSize))
 		count = 0;
-	else if (offset+count > m_fork.logicalSize)
-		count = m_fork.logicalSize - offset;
+	else if (offset+count > be(m_fork.logicalSize))
+		count = be(m_fork.logicalSize) - offset;
 	
 	if (!count)
 		return 0;
