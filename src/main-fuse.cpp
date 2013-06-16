@@ -5,6 +5,7 @@
 #include <endian.h>
 #include <errno.h>
 #include <stdexcept>
+#include <limits>
 #include "HFSVolume.h"
 #include "HFSCatalogBTree.h"
 #include "AppleDisk.h"
@@ -12,6 +13,7 @@
 #include "FileReader.h"
 
 static const char* RESOURCE_FORK_SUFFIX = "#..namedfork#rsrc";
+static const char* XATTR_RESOURCE_FORK = "com.apple.ResourceFork";
 
 Reader* g_fileReader;
 PartitionedDisk* g_partitions;
@@ -41,10 +43,12 @@ int main(int argc, char** argv)
 		ops.open = hfs_open;
 		ops.read = hfs_read;
 		ops.release = hfs_release;
-		ops.opendir = hfs_opendir;
+		//ops.opendir = hfs_opendir;
 		ops.readdir = hfs_readdir;
 		ops.readlink = hfs_readlink;
-		ops.releasedir = hfs_releasedir;
+		//ops.releasedir = hfs_releasedir;
+		ops.getxattr = hfs_getxattr;
+		ops.listxattr = hfs_listxattr;
 	
 		args = new char*[argc+1];
 		args[0] = argv[0];
@@ -69,6 +73,7 @@ int main(int argc, char** argv)
 	delete g_partitions;
 	delete g_fileReader;
 	delete [] args;
+	
 	return rv;
 }
 
@@ -241,20 +246,6 @@ int hfs_release(const char* path, struct fuse_file_info* info)
 	return 0;
 }
 
-int hfs_opendir(const char* path, struct fuse_file_info* info)
-{
-	HFSPlusCatalogFileOrFolder ff;
-    int rv = g_tree->stat(path, &ff);
-
-	if (rv == 0)
-	{
-		if (ff.folder.recordType != RecordType::kHFSPlusFolderRecord)
-			rv = -ENOTDIR;
-	}
-	
-	return rv;
-}
-
 void processResourceForks(std::map<std::string, HFSPlusCatalogFileOrFolder>& contents)
 {
 	for (auto it = contents.begin(); it != contents.end(); it++)
@@ -276,7 +267,7 @@ int hfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler, off_t offse
 	std::map<std::string, HFSPlusCatalogFileOrFolder> contents;
 	int rv = g_tree->listDirectory(path, contents);
 	
-	processResourceForks(contents);
+	//processResourceForks(contents);
 
 	if (rv == 0)
 	{
@@ -293,7 +284,36 @@ int hfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler, off_t offse
 	return rv;
 }
 
-int hfs_releasedir(const char* path, struct fuse_file_info* info)
+int hfs_getxattr(const char* path, const char* name, char* value, size_t vlen)
 {
-	return 0;
+	Reader* file;
+	int rv;
+	
+	if (strcmp(name, XATTR_RESOURCE_FORK) != 0)
+		return -ENODATA;
+	
+	rv = g_tree->openFile(path, &file, true);
+	if (rv < 0)
+		return rv;
+	
+	rv = std::min<int>(std::numeric_limits<int>::max(), file->length());
+	
+	if (vlen >= rv)
+		rv = file->read(value, rv, 0);
+	
+	delete file;
+	
+	return rv;
+}
+
+int hfs_listxattr(const char* path, char* buffer, size_t size)
+{
+	int rv = strlen(XATTR_RESOURCE_FORK)+1;
+	if (size >= rv)
+	{
+		strcpy(buffer, XATTR_RESOURCE_FORK);
+		buffer[rv] = 0;
+	}
+	
+	return rv;
 }

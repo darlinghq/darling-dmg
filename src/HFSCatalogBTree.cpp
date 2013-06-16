@@ -293,7 +293,7 @@ void HFSCatalogBTree::fixEndian(HFSPlusCatalogFileOrFolder& ff)
 time_t HFSCatalogBTree::appleToUnixTime(uint32_t apple)
 {
 	const time_t offset = 2082844800L;
-	return apple + offset;
+	return apple - offset;
 }
 
 int HFSCatalogBTree::openFile(const std::string& path, Reader** forkOut, bool resourceFork)
