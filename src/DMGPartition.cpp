@@ -21,7 +21,10 @@ DMGPartition::DMGPartition(Reader* disk, BLKXTable* table)
 			continue;
 		
 		m_sectors[be(m_table->runs[i].sectorStart)] = i;
-		printf("Sector %d has type 0x%x, starts at byte %d, compressed length %d\n", i, type, be(m_table->runs[i].sectorStart)*512, be(m_table->runs[i].compLength));
+		
+		std::cout << "Sector " << i << " has type 0x" << std::hex << uint32_t(type) << std::dec << ", starts at byte "
+			<< be(m_table->runs[i].sectorStart)*512l << ", compressed length: "
+			<< be(m_table->runs[i].compLength) << ", compressed offset: " << be(m_table->runs[i].compOffset) + be(m_table->dataStart) << std::endl;
 	}
 }
 
@@ -68,7 +71,9 @@ int32_t DMGPartition::readRun(void* buf, int32_t runIndex, uint64_t offsetInSect
 	BLKXRun* run = &m_table->runs[runIndex];
 	RunType runType = RunType(be(run->type));
 	
-	std::cout << "readRun(): offsetInSector = " << offsetInSector << std::endl;
+	count = std::min<int32_t>(count, be(run->sectorCount)*512 - offsetInSector);
+	
+	std::cout << "readRun(): offsetInSector = " << offsetInSector << ", count = " << count << std::endl;
 	
 	switch (runType)
 	{

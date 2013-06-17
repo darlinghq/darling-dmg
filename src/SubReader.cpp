@@ -7,6 +7,8 @@ SubReader::SubReader(Reader* parent, uint64_t offset, uint64_t size)
 
 int32_t SubReader::read(void* buf, int32_t count, uint64_t offset)
 {
+	if (offset > m_size)
+		return 0;
 	if (offset+count > m_size)
 		count = m_size - offset;
 	

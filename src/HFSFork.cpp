@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <iostream>
 #include <stdexcept>
+#include <cassert>
 #include "HFSExtentsOverflowBTree.h"
 
 HFSFork::HFSFork(HFSVolume* vol, const HFSPlusForkData& fork, HFSCatalogNodeID cnid, bool resourceFork)
@@ -85,10 +86,12 @@ int32_t HFSFork::read(void* buf, int32_t count, uint64_t offset)
 	extent = firstExtent;
 	while (read < count)
 	{
-		int32_t thistime = std::min<int32_t>(m_extents[extent].blockCount * blockSize, count-read);
+		int32_t thistime = std::min<int64_t>(m_extents[extent].blockCount * uint64_t(blockSize), count-read);
 		int32_t reallyRead;
 		uint32_t startBlock;
 		uint64_t volumeOffset;
+		
+		thistime = count-read;
 		
 		if (extent >= m_extents.size())
 			loadFromOverflowsFile(blocksSoFar);
@@ -99,12 +102,13 @@ int32_t HFSFork::read(void* buf, int32_t count, uint64_t offset)
 			startBlock += firstBlockInFirstExtent;
 		
 		//std::cout << "Reading from block: " << startBlock << std::endl;
-		volumeOffset = startBlock * blockSize;
+		volumeOffset = uint64_t(startBlock) * blockSize;
 		
 		if (extent == firstExtent)
 			volumeOffset += offset % blockSize;
 		
 		reallyRead = m_volume->m_reader->read((char*)buf + read, thistime, volumeOffset);
+		assert(reallyRead <= thistime);
 		
 		read += reallyRead;
 		
@@ -114,6 +118,8 @@ int32_t HFSFork::read(void* buf, int32_t count, uint64_t offset)
 		blocksSoFar += m_extents[extent].blockCount;
 		extent++;
 	}
+	
+	assert(read <= count);
 	
 	return read;
 }

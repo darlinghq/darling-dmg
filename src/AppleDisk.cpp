@@ -26,8 +26,8 @@ AppleDisk::AppleDisk(Reader* reader)
 		//std::cout << "Partition #" << (i+1) << " type: " << dpme.dpme_type << std::endl;
 		part.name = dpme.dpme_name;
 		part.type = dpme.dpme_type;
-		part.offset = be(dpme.dpme_pblock_start) * be(m_block0.sbBlkSize);
-		part.size = be(dpme.dpme_pblocks) * be(m_block0.sbBlkSize);
+		part.offset = uint64_t(be(dpme.dpme_pblock_start)) * be(m_block0.sbBlkSize);
+		part.size = uint64_t(be(dpme.dpme_pblocks)) * be(m_block0.sbBlkSize);
 		
 		m_partitions.push_back(part);
 	}

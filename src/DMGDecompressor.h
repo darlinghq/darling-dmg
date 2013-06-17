@@ -17,8 +17,8 @@ public:
 	static DMGDecompressor* create(RunType runType, Reader* reader);
 private:
 	Reader* m_reader;
-	uint16_t m_pos;
-	char m_buf[512];
+	uint32_t m_pos;
+	char m_buf[8*1024];
 };
 
 #endif

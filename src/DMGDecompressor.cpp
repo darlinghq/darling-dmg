@@ -14,7 +14,6 @@ class DMGDecompressor_Zlib : public DMGDecompressor
 public:
 	DMGDecompressor_Zlib(Reader* reader);
 	~DMGDecompressor_Zlib();
-	void reinit();
 	virtual int32_t decompress(void* output, int32_t outputBytes) override;
 private:
 	z_stream m_strm;
@@ -62,12 +61,16 @@ int DMGDecompressor::readSome(char** ptr)
 	*ptr = m_buf;
 	int rd = m_reader->read(m_buf, sizeof(m_buf), m_pos);
 	
+	if (rd <= 0)
+		throw std::runtime_error("DMGDecompressor cannot read from stream");
+	
 	return rd;
 }
 
 void DMGDecompressor::processed(int bytes)
 {
 	m_pos += bytes;
+	std::cout << "Processed: " << bytes << ", total: " << m_pos << std::endl;
 }
 
 DMGDecompressor_Zlib::DMGDecompressor_Zlib(Reader* reader)
@@ -83,49 +86,41 @@ DMGDecompressor_Zlib::~DMGDecompressor_Zlib()
 	inflateEnd(&m_strm);
 }
 
-/*
-void DMGDecompressor_Zlib::reinit()
-{
-	inflateEnd(&m_strm);
-	memset(&m_strm, 0, sizeof(m_strm));
-	if (inflateInit(&m_strm) != Z_OK)
-		throw std::bad_alloc();
-}
-*/
-
 int32_t DMGDecompressor_Zlib::decompress(void* output, int32_t outputBytes)
 {
 	int status;
 	char* input;
 	int inputBytes;
+	int32_t done = 0;
 
-	inputBytes = readSome(&input);
-	
-	m_strm.next_in = (Bytef*) input;
-	m_strm.next_out = (Bytef*) output;
-	m_strm.avail_in = inputBytes;
-	m_strm.avail_out = outputBytes;
-	
-	std::cout << "ZLIB decompressor supplying " << inputBytes << " bytes\n";
-	std::cout << "Buffer is at " << (void*)m_strm.next_in << std::endl;
-	
-	status = inflate(&m_strm, Z_SYNC_FLUSH);
-	if (status == Z_OK || status == Z_STREAM_END)
+	do
 	{
-		std::cout << m_strm.avail_in << " bytes left\n";
-		std::cout << "next_in = " << (void*)m_strm.next_in << std::endl;
-		std::cout << "status = " << status << std::endl;
-		
-		int32_t done = outputBytes - m_strm.avail_out;
-		
+		inputBytes = readSome(&input);
+	
+		m_strm.next_in = (Bytef*) input;
+		m_strm.next_out = (Bytef*) output + done;
+		m_strm.avail_in = inputBytes;
+		m_strm.avail_out = outputBytes - done;
+	
+		std::cout << "ZLIB decompressor supplying " << inputBytes << " bytes\n";
+		std::cout << "Buffer is at " << (void*)m_strm.next_in << std::endl;
+	
+		status = inflate(&m_strm, Z_SYNC_FLUSH);
+
 		processed(inputBytes - m_strm.avail_in);
-		// if (status == Z_STREAM_END)
-		// 	reinit();
-		
-		return done;
+		done += outputBytes - m_strm.avail_out;
+
+		std::cout << m_strm.avail_in << " bytes left\n";
+		std::cout << "status = " << status << std::endl;
+
+		if (status == Z_STREAM_END)
+			break;
+		else if (status < 0)
+			return status;
 	}
-	else
-		return status;
+	while (done == 0);
+
+	return done;
 }
 
 DMGDecompressor_Bzip2::DMGDecompressor_Bzip2(Reader* reader)
@@ -146,22 +141,39 @@ int32_t DMGDecompressor_Bzip2::decompress(void* output, int32_t outputBytes)
 	int status;
 	char* input;
 	int inputBytes;
-
-	inputBytes = readSome(&input);
-
-	m_strm.next_in = (char*) input;
-	m_strm.next_out = (char*) output;
-	m_strm.avail_in = inputBytes;
-	m_strm.avail_out = outputBytes;
+	int32_t done = 0;
 	
-	status = BZ2_bzDecompress(&m_strm);
-	if (status == BZ_OK || status == BZ_STREAM_END)
+	std::cout << "bz2: Asked to provide " << outputBytes << " bytes\n";
+
+	do
 	{
+		inputBytes = readSome(&input);
+
+		m_strm.next_in = (char*) input;
+		m_strm.next_out = (char*) output + done;
+		m_strm.avail_in = inputBytes;
+		m_strm.avail_out = outputBytes - done;
+	
+		std::cout << "Bzip2 decompressor supplying " << inputBytes << " bytes\n";
+		std::cout << "Bzip2 output buffer is " << outputBytes-done << " bytes long\n";
+	
+		status = BZ2_bzDecompress(&m_strm);
+
 		processed(inputBytes - m_strm.avail_in);
-		return outputBytes - m_strm.avail_out;
+		done += outputBytes - m_strm.avail_out;
+
+		std::cout << m_strm.avail_in << " bytes left in input\n";
+		std::cout << "bzip2: status = " << status << std::endl;
+		std::cout << "bzip2: avail_out = " << m_strm.avail_out << std::endl;
+
+		if (status == BZ_STREAM_END)
+			break;
+		else if (status < 0)
+			return status;
 	}
-	else
-		return status;
+	while (done == 0);
+
+	return done;
 }
 
 int32_t DMGDecompressor_ADC::decompress(void* output, int32_t outputBytes)

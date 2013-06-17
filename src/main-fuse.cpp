@@ -14,6 +14,7 @@
 
 static const char* RESOURCE_FORK_SUFFIX = "#..namedfork#rsrc";
 static const char* XATTR_RESOURCE_FORK = "com.apple.ResourceFork";
+static const char* XATTR_FINDER_INFO = "com.apple.FinderInfo";
 
 Reader* g_fileReader;
 PartitionedDisk* g_partitions;
@@ -286,34 +287,67 @@ int hfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler, off_t offse
 
 int hfs_getxattr(const char* path, const char* name, char* value, size_t vlen)
 {
-	Reader* file;
 	int rv;
+	std::string spath = path;
 	
-	if (strcmp(name, XATTR_RESOURCE_FORK) != 0)
+	if (string_endsWith(spath, RESOURCE_FORK_SUFFIX))
+		spath.resize(spath.length() - strlen(RESOURCE_FORK_SUFFIX));
+	
+	if (strcmp(name, XATTR_RESOURCE_FORK) == 0)
+	{
+		Reader* file;
+
+		rv = g_tree->openFile(spath.c_str(), &file, true);
+		if (rv < 0)
+			return rv;
+	
+		rv = std::min<int>(std::numeric_limits<int>::max(), file->length());
+	
+		if (vlen >= rv)
+			rv = file->read(value, rv, 0);
+	
+		delete file;
+	}
+	else if (strcmp(name, XATTR_FINDER_INFO) == 0)
+	{
+		HFSPlusCatalogFileOrFolder ff;
+	
+		rv = g_tree->stat(spath.c_str(), &ff);
+		if (rv != 0)
+			return rv;
+
+		rv = 32;
+
+		if (vlen >= rv)
+		{
+			if (ff.file.recordType == RecordType::kHFSPlusFileRecord)
+			{
+				memcpy(value, &ff.file.userInfo, sizeof(ff.file.userInfo));
+				memcpy(value + sizeof(ff.file.userInfo), &ff.file.finderInfo, sizeof(ff.file.finderInfo));
+			}
+			else
+			{
+				memcpy(value, &ff.folder.userInfo, sizeof(ff.folder.userInfo));
+				memcpy(value + sizeof(ff.folder.userInfo), &ff.folder.finderInfo, sizeof(ff.folder.finderInfo));
+			}
+		}
+	}
+	else
 		return -ENODATA;
-	
-	rv = g_tree->openFile(path, &file, true);
-	if (rv < 0)
-		return rv;
-	
-	rv = std::min<int>(std::numeric_limits<int>::max(), file->length());
-	
-	if (vlen >= rv)
-		rv = file->read(value, rv, 0);
-	
-	delete file;
 	
 	return rv;
 }
 
 int hfs_listxattr(const char* path, char* buffer, size_t size)
 {
-	int rv = strlen(XATTR_RESOURCE_FORK)+1;
-	if (size >= rv)
+	int rflen = strlen(XATTR_RESOURCE_FORK)+1;
+	int filen = strlen(XATTR_FINDER_INFO)+1;
+
+	if (size >= rflen+filen)
 	{
 		strcpy(buffer, XATTR_RESOURCE_FORK);
-		buffer[rv] = 0;
+		strcpy(buffer+rflen, XATTR_FINDER_INFO);
 	}
 	
-	return rv;
+	return rflen+filen;
 }

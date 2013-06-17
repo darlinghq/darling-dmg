@@ -20,6 +20,8 @@ int32_t FileReader::read(void* buf, int32_t count, uint64_t offset)
 	if (m_fd == -1)
 		return -1;
 	
+	static_assert(sizeof(off_t) == 8, "off_t is too small");
+	
 	return ::pread(m_fd, buf, count, offset);
 }
 
