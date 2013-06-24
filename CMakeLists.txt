@@ -36,6 +36,6 @@ add_executable(darling-dmg
 	src/MacBinary.cpp
 )
 
-target_link_libraries(darling-dmg -licuuc -lssl -lz -lbz2 -lfuse ${LIBXML2_LIBRARY})
+target_link_libraries(darling-dmg -licuuc -lcrypto -lz -lbz2 -lfuse ${LIBXML2_LIBRARY})
 install(TARGETS darling-dmg RUNTIME DESTINATION bin)
 
