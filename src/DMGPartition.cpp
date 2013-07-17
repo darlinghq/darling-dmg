@@ -39,7 +39,7 @@ int32_t DMGPartition::read(void* buf, int32_t count, uint64_t offset)
 	
 	while (done < count)
 	{
-		std::map<uint64_t, uint32_t>::iterator itRun = m_sectors.upper_bound(offset / SECTOR_SIZE);
+		std::map<uint64_t, uint32_t>::iterator itRun = m_sectors.upper_bound((offset + done) / SECTOR_SIZE);
 		uint64_t offsetInSector = 0;
 		int32_t thistime;
 
@@ -73,7 +73,7 @@ int32_t DMGPartition::readRun(void* buf, int32_t runIndex, uint64_t offsetInSect
 	
 	count = std::min<int32_t>(count, be(run->sectorCount)*512 - offsetInSector);
 	
-	std::cout << "readRun(): offsetInSector = " << offsetInSector << ", count = " << count << std::endl;
+	std::cout << "readRun(): runIndex = " << runIndex << ", offsetInSector = " << offsetInSector << ", count = " << count << std::endl;
 	
 	switch (runType)
 	{
