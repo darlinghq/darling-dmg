@@ -5,6 +5,7 @@
 #include "unichar.h"
 #include <iostream>
 #include <cstring>
+#include <set>
 #include "HFSBTreeNode.h"
 
 HFSBTree::HFSBTree(HFSFork* fork)
@@ -41,6 +42,7 @@ HFSBTreeNode HFSBTree::findLeafNode(const Key* indexKey, KeyComparator comp)
 std::vector<HFSBTreeNode> HFSBTree::findLeafNodes(const Key* indexKey, KeyComparator comp)
 {
 	std::vector<HFSBTreeNode> rv;
+	std::set<uint32_t> uniqLink; // for broken filesystems
 	HFSBTreeNode current = findLeafNode(indexKey, comp);
 
 	if (current.isInvalid())
@@ -51,7 +53,16 @@ std::vector<HFSBTreeNode> HFSBTree::findLeafNodes(const Key* indexKey, KeyCompar
 	while (current.forwardLink() != 0)
 	{
 		Key* key;
+		
+		if (uniqLink.find(current.forwardLink()) != uniqLink.end())
+		{
+			std::cerr << "WARNING: forward link loop detected!\n";
+			break;
+		}
+		else
+			uniqLink.insert(current.forwardLink());
 
+		std::cout << "Testing node " << current.forwardLink() << std::endl;
 		current = HFSBTreeNode(m_tree, current.forwardLink(), current.nodeSize());
 		
 		key = current.getKey<Key>(); // TODO: or the key of the first record?
