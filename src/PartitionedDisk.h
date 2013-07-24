@@ -17,7 +17,7 @@ public:
 	virtual ~PartitionedDisk() {}
 
 	virtual const std::vector<Partition>& partitions() const = 0;
-	virtual Reader* readerForPartition(unsigned int index) = 0;
+	virtual Reader* readerForPartition(int index) = 0;
 };
 
 #endif

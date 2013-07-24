@@ -5,9 +5,14 @@
 #include "SubReader.h"
 
 AppleDisk::AppleDisk(Reader* reader)
-: m_reader(reader)
 {
-	reader->read(&m_block0, sizeof(m_block0), 0);
+	AppleDisk(reader, nullptr);
+}
+
+AppleDisk::AppleDisk(Reader* readerBlock0, Reader* readerPM)
+: m_reader(readerBlock0)
+{
+	readerBlock0->read(&m_block0, sizeof(m_block0), 0);
 	
 	if (be(m_block0.sbSig) != BLOCK0_SIGNATURE)
 		throw std::runtime_error("Invalid block0 signature");
@@ -17,8 +22,16 @@ AppleDisk::AppleDisk(Reader* reader)
 		DPME dpme;
 		uint64_t offset = (i+1)*be(m_block0.sbBlkSize);
 		Partition part;
+
+		if (!readerPM)
+			offset = (i+1)*be(m_block0.sbBlkSize);
+		else
+			offset = i*be(m_block0.sbBlkSize);
 		
-		reader->read(&dpme, sizeof(dpme), offset);
+		if (!readerPM)
+			readerBlock0->read(&dpme, sizeof(dpme), offset);
+		else
+			readerPM->read(&dpme, sizeof(dpme), offset);
 		
 		if (be(dpme.dpme_signature) != DPME_SIGNATURE)
 			continue;
@@ -40,7 +53,7 @@ bool AppleDisk::isAppleDisk(Reader* reader)
 	return be(sig) == BLOCK0_SIGNATURE;
 }
 
-Reader* AppleDisk::readerForPartition(unsigned int index)
+Reader* AppleDisk::readerForPartition(int index)
 {
 	const Partition& part = m_partitions.at(index);
 	return new SubReader(m_reader, part.offset, part.size);

@@ -51,17 +51,23 @@ void HFSExtentsOverflowBTree::findExtentsForFile(HFSCatalogNodeID cnid, bool res
 	}
 }
 
-bool HFSExtentsOverflowBTree::cnidComparator(const Key* indexKey, const Key* desiredKey)
+HFSBTree::CompareResult HFSExtentsOverflowBTree::cnidComparator(const Key* indexKey, const Key* desiredKey)
 {
 	const HFSPlusExtentKey* indexExtentKey = reinterpret_cast<const HFSPlusExtentKey*>(indexKey);
 	const HFSPlusExtentKey* desiredExtentKey = reinterpret_cast<const HFSPlusExtentKey*>(desiredKey);
 
-	if (indexExtentKey->forkType != desiredExtentKey->forkType)
-		return false;
-
-	if (be(indexExtentKey->fileID) > desiredExtentKey->fileID)
-		return false;
-
-	return true;
+	if (indexExtentKey->forkType > desiredExtentKey->forkType)
+		return CompareResult::Greater;
+	else if (indexExtentKey->forkType < desiredExtentKey->forkType)
+		return CompareResult::Smaller;
+	else
+	{
+		if (be(indexExtentKey->fileID) > desiredExtentKey->fileID)
+			return CompareResult::Greater;
+		else if (be(indexExtentKey->fileID) < desiredExtentKey->fileID)
+			return CompareResult::Smaller;
+		else
+			return CompareResult::Equal;
+	}
 }
 

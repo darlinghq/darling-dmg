@@ -34,16 +34,16 @@ HFSBTree::HFSBTree(HFSFork* fork)
 	}*/
 }
 
-HFSBTreeNode HFSBTree::findLeafNode(const Key* indexKey, KeyComparator comp)
+HFSBTreeNode HFSBTree::findLeafNode(const Key* indexKey, KeyComparator comp, bool wildcard)
 {
-	return traverseTree(be(m_header.rootNode), indexKey, comp);
+	return traverseTree(be(m_header.rootNode), indexKey, comp, wildcard);
 }
 
 std::vector<HFSBTreeNode> HFSBTree::findLeafNodes(const Key* indexKey, KeyComparator comp)
 {
 	std::vector<HFSBTreeNode> rv;
 	std::set<uint32_t> uniqLink; // for broken filesystems
-	HFSBTreeNode current = findLeafNode(indexKey, comp);
+	HFSBTreeNode current = findLeafNode(indexKey, comp, true);
 
 	if (current.isInvalid())
 		return rv;
@@ -67,7 +67,7 @@ std::vector<HFSBTreeNode> HFSBTree::findLeafNodes(const Key* indexKey, KeyCompar
 		
 		key = current.getKey<Key>(); // TODO: or the key of the first record?
 
-		if (!comp(key, indexKey))
+		if (comp(key, indexKey) == CompareResult::Greater)
 			break;
 
 		rv.push_back(current);
@@ -76,7 +76,7 @@ std::vector<HFSBTreeNode> HFSBTree::findLeafNodes(const Key* indexKey, KeyCompar
 	return rv;
 }
 
-HFSBTreeNode HFSBTree::traverseTree(int nodeIndex, const Key* indexKey, KeyComparator comp)
+HFSBTreeNode HFSBTree::traverseTree(int nodeIndex, const Key* indexKey, KeyComparator comp, bool wildcard)
 {
 	HFSBTreeNode node(m_tree, nodeIndex, be(m_header.nodeSize));
 
@@ -90,17 +90,21 @@ HFSBTreeNode HFSBTree::traverseTree(int nodeIndex, const Key* indexKey, KeyCompa
 			for (position = int(node.recordCount())-1; position >= 0; position--)
 			{
 				Key* key = node.getRecordKey<Key>(position);
-				if (comp(key, indexKey))
+				auto r = comp(key, indexKey);
+
+				if (wildcard && r == CompareResult::Smaller)
+					break;
+				if (!wildcard && r != CompareResult::Greater)
 					break;
 			}
 			
 			if (position < 0)
-				return HFSBTreeNode();
+				position = 0;
 			
 			// recurse down
 			childIndex = node.getRecordData<uint32_t>(position);
 			
-			return traverseTree(be(*childIndex), indexKey, comp);
+			return traverseTree(be(*childIndex), indexKey, comp, wildcard);
 		}
 		case NodeKind::kBTLeafNode:
 		{

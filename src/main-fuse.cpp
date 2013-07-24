@@ -105,6 +105,8 @@ void openDisk(const char* path)
 				partIndex = i;
 				break;
 			}
+			else
+				std::cerr << "Skipping partition of type " << parts[i].type << std::endl;
 		}
 
 		if (partIndex == -1)

@@ -43,9 +43,10 @@ int32_t DMGPartition::read(void* buf, int32_t count, uint64_t offset)
 		uint64_t offsetInSector = 0;
 		int32_t thistime;
 
-		if (itRun == m_sectors.end())
+		if (offset+done > length())
 			break; // read beyond EOF
-		else if (itRun == m_sectors.begin())
+		
+		if (itRun == m_sectors.begin())
 			throw std::runtime_error("Invalid run sector data");
 		
 		itRun--; // move to the sector we want to read

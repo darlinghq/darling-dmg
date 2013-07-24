@@ -18,7 +18,7 @@ bool HFSCatalogBTree::isCaseSensitive() const
 	return m_volume->isHFSX() && m_header.keyCompareType == KeyCompareType::kHFSBinaryCompare;
 }
 
-bool HFSCatalogBTree::caseInsensitiveComparator(const Key* indexKey, const Key* desiredKey)
+HFSBTree::CompareResult HFSCatalogBTree::caseInsensitiveComparator(const Key* indexKey, const Key* desiredKey)
 {
 	const HFSPlusCatalogKey* catIndexKey = reinterpret_cast<const HFSPlusCatalogKey*>(indexKey);
 	const HFSPlusCatalogKey* catDesiredKey = reinterpret_cast<const HFSPlusCatalogKey*>(desiredKey);
@@ -26,49 +26,77 @@ bool HFSCatalogBTree::caseInsensitiveComparator(const Key* indexKey, const Key* 
 
 	if (catDesiredKey->parentID < be(catIndexKey->parentID))
 	{
-		//std::cout << "desired: " << catDesiredKey->parentID << ", index: " << be(catIndexKey->parentID) << std::endl;
-		return false;
+		std::cout << "desired: " << catDesiredKey->parentID << ", index: " << be(catIndexKey->parentID) << " -> bigger\n";
+		return CompareResult::Greater;
+	}
+	else if (catDesiredKey->parentID > be(catIndexKey->parentID))
+	{
+		std::cout << "desired: " << catDesiredKey->parentID << ", index: " << be(catIndexKey->parentID) << " -> smaller\n";
+		return CompareResult::Smaller;
 	}
 
 	desiredName = UnicodeString((char*)catDesiredKey->nodeName.string, catDesiredKey->nodeName.length*2, "UTF-16BE");
 	indexName = UnicodeString((char*)catIndexKey->nodeName.string, be(catIndexKey->nodeName.length)*2, "UTF-16BE");
 
-	if (desiredName.length() > 0 && desiredName.caseCompare(indexName, 0) < 0 && catDesiredKey->parentID < be(catIndexKey->parentID))
+	if (desiredName.length() > 0)
 	{
-		//std::string des, idx;
-		//desiredName.toUTF8String(des);
-		//indexName.toUTF8String(idx);
-		//std::cout << "Rejected, desired: " << des << " - index: " << idx << std::endl;
-		return false;
-	}
+		std::string des, idx;
+		desiredName.toUTF8String(des);
+		indexName.toUTF8String(idx);
+		
+		int r = desiredName.caseCompare(indexName, 0);
+		
+		std::cout << "desired: " << des << " - index: " << idx << " -> r=" << r << std::endl;
 
-	return true;
+		if (r < 0)
+			return CompareResult::Greater;
+		else if (r > 0)
+			return CompareResult::Smaller;
+	}
+	
+	return CompareResult::Equal;
 }
 
-bool HFSCatalogBTree::caseSensitiveComparator(const Key* indexKey, const Key* desiredKey)
+HFSBTree::CompareResult HFSCatalogBTree::caseSensitiveComparator(const Key* indexKey, const Key* desiredKey)
 {
 	const HFSPlusCatalogKey* catIndexKey = reinterpret_cast<const HFSPlusCatalogKey*>(indexKey);
 	const HFSPlusCatalogKey* catDesiredKey = reinterpret_cast<const HFSPlusCatalogKey*>(desiredKey);
 	UnicodeString desiredName, indexName;
 
 	if (catDesiredKey->parentID < be(catIndexKey->parentID))
-		return false;
+		return CompareResult::Greater;
+	else if (catDesiredKey->parentID > be(catIndexKey->parentID))
+		return CompareResult::Smaller;
 
 	desiredName = UnicodeString((char*)catDesiredKey->nodeName.string, catDesiredKey->nodeName.length*2, "UTF-16BE");
 	indexName = UnicodeString((char*)catIndexKey->nodeName.string, be(catIndexKey->nodeName.length)*2, "UTF-16BE");
 
-	if (desiredName.length() > 0 && desiredName.compare(indexName) < 0 && catDesiredKey->parentID < be(catIndexKey->parentID))
-		return false;
+	if (desiredName.length() > 0)
+	{
+		int r = desiredName.compare(indexName);
 
-	return true;
+		if (r < 0)
+			return CompareResult::Greater;
+		else if (r > 0)
+			return CompareResult::Smaller;
+	}
+
+	return CompareResult::Equal;
 }
 
-bool HFSCatalogBTree::idOnlyComparator(const Key* indexKey, const Key* desiredKey)
+HFSBTree::CompareResult HFSCatalogBTree::idOnlyComparator(const Key* indexKey, const Key* desiredKey)
 {
 	const HFSPlusCatalogKey* catIndexKey = reinterpret_cast<const HFSPlusCatalogKey*>(indexKey);
 	const HFSPlusCatalogKey* catDesiredKey = reinterpret_cast<const HFSPlusCatalogKey*>(desiredKey);
+	
+	std::cerr << "idOnly: desired: " << catDesiredKey->parentID << ", index: " << be(catIndexKey->parentID) << std::endl;
 
-	return catDesiredKey->parentID >= be(catIndexKey->parentID);
+	if (catDesiredKey->parentID > be(catIndexKey->parentID))
+		return CompareResult::Smaller;
+	else if (be(catIndexKey->parentID) > catDesiredKey->parentID)
+		return CompareResult::Greater;
+	else
+		return CompareResult::Equal;
 }
 
 int HFSCatalogBTree::listDirectory(const std::string& path, std::map<std::string, HFSPlusCatalogFileOrFolder>& contents)
@@ -92,10 +120,13 @@ int HFSCatalogBTree::listDirectory(const std::string& path, std::map<std::string
 
 	// find leaves that may contain directory elements
 	key.parentID = dir.folder.folderID;
-	leaves = findLeafNodes((Key*) &key, idOnlyComparator); 
+	leaves = findLeafNodes((Key*) &key, idOnlyComparator);
 
 	for (const HFSBTreeNode& leaf : leaves)
+	{
+		std::cerr << "**** Looking for elems with CNID " << key.parentID << std::endl;
 		findRecordForParentAndName(leaf, key.parentID, beContents);
+	}
 
 	for (auto it = beContents.begin(); it != beContents.end(); it++)
 	{
@@ -219,6 +250,10 @@ void HFSCatalogBTree::findRecordForParentAndName(const HFSBTreeNode& leafNode, H
 		ff = leafNode.getRecordData<HFSPlusCatalogFileOrFolder>(i);
 
 		recType = RecordType(be(uint16_t(ff->folder.recordType)));
+		{
+			std::string name = UnicharToString(recordKey->nodeName);
+			std::cerr << "RecType " << int(recType) << ", ParentID: " << be(recordKey->parentID) << ", nodeName " << name << std::endl;
+		}
 
 		switch (recType)
 		{
@@ -243,6 +278,8 @@ void HFSCatalogBTree::findRecordForParentAndName(const HFSBTreeNode& leafNode, H
 						result[name] = ff;
 					}
 				}
+				else
+					std::cerr << "CNID not matched - " << cnid << " required\n";
 				break;
 			}
 			case RecordType::kHFSPlusFolderThreadRecord:

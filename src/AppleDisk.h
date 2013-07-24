@@ -12,9 +12,12 @@ public:
 	AppleDisk(Reader* reader);
 	
 	virtual const std::vector<Partition>& partitions() const override { return m_partitions; }
-	virtual Reader* readerForPartition(unsigned int index) override;
+	virtual Reader* readerForPartition(int index) override;
 
 	static bool isAppleDisk(Reader* reader);
+private:
+	AppleDisk(Reader* readerBlock0, Reader* readerPM);
+	friend class DMGDisk;
 private:
 	Reader* m_reader;
 	Block0 m_block0;

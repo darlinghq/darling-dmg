@@ -7,6 +7,7 @@
 #include <openssl/evp.h>
 #include <memory>
 #include "DMGPartition.h"
+#include "AppleDisk.h"
 
 DMGDisk::DMGDisk(Reader* reader)
 	: m_reader(reader)
@@ -57,6 +58,7 @@ void DMGDisk::loadKoly(const UDIFResourceFile& koly)
 
 	m_kolyXML = xmlParseMemory(xmlData.get(), length);
 
+#if 0 // Asian copies of OS X put crap UTF characters into XML data making type/name parsing unreliable
 	xpathContext = xmlXPathNewContext(m_kolyXML);
 
 	// select all partition dictionaries with partition ID >= 0
@@ -65,9 +67,22 @@ void DMGDisk::loadKoly(const UDIFResourceFile& koly)
 
 	if (xpathObj && xpathObj->nodesetval)
 		loadPartitionElements(xpathContext, xpathObj->nodesetval);
-
+	
 	xmlXPathFreeObject(xpathObj);
 	xmlXPathFreeContext(xpathContext);
+#else
+	Reader *rm1, *r1;
+	AppleDisk* adisk;
+
+	rm1 = readerForPartition(-1);
+	r1 = readerForPartition(0);
+
+	adisk = new AppleDisk(rm1, r1);
+	m_partitions = adisk->partitions();
+	delete adisk;
+	delete rm1;
+	delete r1;
+#endif
 }
 
 void DMGDisk::loadPartitionElements(xmlXPathContextPtr xpathContext, xmlNodeSetPtr nodes)
@@ -83,7 +98,10 @@ void DMGDisk::loadPartitionElements(xmlXPathContextPtr xpathContext, xmlNodeSetP
 
 		xpathContext->node = nodes->nodeTab[i];
 
-		xpathObj = xmlXPathEvalExpression((const xmlChar*) "string(key[text()='Name']/following-sibling::string)", xpathContext);
+		xpathObj = xmlXPathEvalExpression((const xmlChar*) "string(key[text()='CFName']/following-sibling::string)", xpathContext);
+		
+		if (!xpathObj || !xpathObj->stringval)
+			xpathObj = xmlXPathEvalExpression((const xmlChar*) "string(key[text()='Name']/following-sibling::string)", xpathContext);
 
 		if (!xpathObj || !xpathObj->stringval)
 			throw std::runtime_error("Invalid XML data, partition Name key not found");
@@ -123,7 +141,7 @@ bool DMGDisk::parseNameAndType(const std::string& nameAndType, std::string& name
 	return true;
 }
 
-BLKXTable* DMGDisk::loadBLKXTableForPartition(unsigned int index)
+BLKXTable* DMGDisk::loadBLKXTableForPartition(int index)
 {
 	xmlXPathContextPtr xpathContext;
 	xmlXPathObjectPtr xpathObj;
@@ -131,7 +149,7 @@ BLKXTable* DMGDisk::loadBLKXTableForPartition(unsigned int index)
 	BLKXTable* rv = nullptr;
 
 	sprintf(expr, "string(/plist/dict/key[text()='resource-fork']/following-sibling::dict[1]/key[text()='blkx']"
-		"/following-sibling::array[1]/dict[key[text()='ID']/following-sibling::string[text() = %u]]/key[text()='Data']/following-sibling::data)", index);
+		"/following-sibling::array[1]/dict[key[text()='ID']/following-sibling::string[text() = %d]]/key[text()='Data']/following-sibling::data)", index);
 
 	xpathContext = xmlXPathNewContext(m_kolyXML);
 	xpathObj = xmlXPathEvalExpression((const xmlChar*) expr, xpathContext);
@@ -173,7 +191,7 @@ bool DMGDisk::base64Decode(const std::string& input, std::vector<uint8_t>& outpu
 	return rd >= 0;
 }
 
-Reader* DMGDisk::readerForPartition(unsigned int index)
+Reader* DMGDisk::readerForPartition(int index)
 {
 	BLKXTable* table = loadBLKXTableForPartition(index);
 	if (!table)
