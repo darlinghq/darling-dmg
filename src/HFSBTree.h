@@ -18,13 +18,13 @@ public:
 		uint16_t length;
 		char data[];
 	} __attribute__((packed));
-	enum class CompareResult
+	enum CompareResult
 	{
-		Smaller, Equal, Greater
+		Smaller = -1, Equal = 0, Greater = 1
 	};
 
 	// Returns true if the desiredKey >= indexKey
-	typedef CompareResult (*KeyComparator)(const Key* indexKey, const Key* desiredKey);
+	typedef int (*KeyComparator)(const Key* indexKey, const Key* desiredKey);
 
 	// Used when searching for an exact key (e.g. a specific file in a folder)
 	HFSBTreeNode findLeafNode(const Key* indexKey, KeyComparator comp, bool wildcard = false);

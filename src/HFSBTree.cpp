@@ -6,6 +6,7 @@
 #include <iostream>
 #include <cstring>
 #include <set>
+#include <algorithm>
 #include "HFSBTreeNode.h"
 
 HFSBTree::HFSBTree(HFSFork* fork)
@@ -67,7 +68,7 @@ std::vector<HFSBTreeNode> HFSBTree::findLeafNodes(const Key* indexKey, KeyCompar
 		
 		key = current.getKey<Key>(); // TODO: or the key of the first record?
 
-		if (comp(key, indexKey) == CompareResult::Greater)
+		if (comp(key, indexKey) > 0)
 			break;
 
 		rv.push_back(current);
@@ -87,15 +88,21 @@ HFSBTreeNode HFSBTree::traverseTree(int nodeIndex, const Key* indexKey, KeyCompa
 			int position;
 			uint32_t* childIndex;
 
-			for (position = int(node.recordCount())-1; position >= 0; position--)
+			if (wildcard)
 			{
-				Key* key = node.getRecordKey<Key>(position);
-				auto r = comp(key, indexKey);
+				auto it = std::lower_bound(node.begin<Key>(), node.end<Key>(), indexKey, [=](const Key* keyA, const Key* keyB) {
+					return comp(keyA, keyB) < 0;
+				});
 
-				if (wildcard && r == CompareResult::Smaller)
-					break;
-				if (!wildcard && r != CompareResult::Greater)
-					break;
+				position = it.index() - 1;
+			}
+			else
+			{
+				auto it = std::upper_bound(node.begin<Key>(), node.end<Key>(), indexKey, [=](const Key* keyA, const Key* keyB) {
+					return comp(keyA, keyB) < 0;
+				});
+
+				position = it.index() - 1;
 			}
 			
 			if (position < 0)

@@ -113,7 +113,10 @@ int32_t HFSFork::read(void* buf, int32_t count, uint64_t offset)
 		read += reallyRead;
 		
 		if (reallyRead != thistime)
+		{
+			std::cerr << "Short read: " << thistime << " expected, " << reallyRead << " received\n";
 			break;
+		}
 		
 		blocksSoFar += m_extents[extent].blockCount;
 		extent++;

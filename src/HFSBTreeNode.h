@@ -75,6 +75,68 @@ public:
 		
 		return reinterpret_cast<DataType*>(keyPtr + be(*keyLength) + sizeof(uint16_t));
 	}
+
+	template <typename KeyType> class RecordIterator : public std::iterator<std::random_access_iterator_tag, KeyType>
+	{
+	public:
+		typedef typename std::iterator<std::random_access_iterator_tag, KeyType>::difference_type difference_type;
+
+		RecordIterator(const HFSBTreeNode* node, int index) : m_node(node), m_index(index)
+		{
+		}
+		KeyType* operator*()
+		{
+			return m_node->getRecordKey<KeyType>(m_index);
+		}
+		RecordIterator& operator++()
+		{
+			m_index++;
+			return *this;
+		}
+
+		difference_type operator-(const RecordIterator& that)
+		{
+			return m_index - that.m_index;
+		}
+
+		RecordIterator& operator+=(const difference_type& n)
+		{
+			m_index += n;
+			return *this;
+		}
+
+		RecordIterator& operator-=(const difference_type& n)
+		{
+			m_index -= n;
+			return *this;
+		}
+
+		bool operator!=(const RecordIterator& that)
+		{
+			return m_index != that.m_index;
+		}
+		bool operator==(const RecordIterator& that)
+		{
+			return m_index == that.m_index;
+		}
+		int index() const
+		{
+			return m_index;
+		}
+	private:
+		const HFSBTreeNode* m_node;
+		int m_index;
+	};
+
+	template <typename KeyType> RecordIterator<KeyType> begin() const
+	{
+		return RecordIterator<KeyType>(this, 0);
+	}
+
+	template <typename KeyType> RecordIterator<KeyType> end() const
+	{
+		return RecordIterator<KeyType>(this, recordCount());
+	}
 	
 private:
 	char* descPtr() const

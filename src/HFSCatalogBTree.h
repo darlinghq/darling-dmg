@@ -28,9 +28,9 @@ protected:
 	// does not clear the result argument
 	void findRecordForParentAndName(const HFSBTreeNode& leafNode, HFSCatalogNodeID cnid, std::map<std::string, HFSPlusCatalogFileOrFolder*>& result, const std::string& name = std::string());
 private:
-	static CompareResult caseInsensitiveComparator(const Key* indexKey, const Key* desiredKey);
-	static CompareResult caseSensitiveComparator(const Key* indexKey, const Key* desiredKey);
-	static CompareResult idOnlyComparator(const Key* indexKey, const Key* desiredKey);
+	static int caseInsensitiveComparator(const Key* indexKey, const Key* desiredKey);
+	static int caseSensitiveComparator(const Key* indexKey, const Key* desiredKey);
+	static int idOnlyComparator(const Key* indexKey, const Key* desiredKey);
 	static void fixEndian(HFSPlusCatalogFileOrFolder& ff);
 private:
 	HFSVolume* m_volume;
