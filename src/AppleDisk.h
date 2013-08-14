@@ -17,6 +17,7 @@ public:
 	static bool isAppleDisk(Reader* reader);
 private:
 	AppleDisk(Reader* readerBlock0, Reader* readerPM);
+	void load(Reader* readerPM);
 	friend class DMGDisk;
 private:
 	Reader* m_reader;

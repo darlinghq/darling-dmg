@@ -5,14 +5,24 @@
 #include "SubReader.h"
 
 AppleDisk::AppleDisk(Reader* reader)
+	: m_reader(reader)
 {
-	AppleDisk(reader, nullptr);
+	load(nullptr);
 }
 
 AppleDisk::AppleDisk(Reader* readerBlock0, Reader* readerPM)
 : m_reader(readerBlock0)
 {
-	readerBlock0->read(&m_block0, sizeof(m_block0), 0);
+	load(readerPM);
+}
+
+void AppleDisk::load(Reader* readerPM)
+{
+	size_t blockSize = be(m_block0.sbBlkSize);
+	
+	blockSize = 512;
+	
+	m_reader->read(&m_block0, sizeof(m_block0), 0);
 	
 	if (be(m_block0.sbSig) != BLOCK0_SIGNATURE)
 		throw std::runtime_error("Invalid block0 signature");
@@ -20,27 +30,27 @@ AppleDisk::AppleDisk(Reader* readerBlock0, Reader* readerPM)
 	for (int i = 0; i < 63; i++)
 	{
 		DPME dpme;
-		uint64_t offset = (i+1)*be(m_block0.sbBlkSize);
+		uint64_t offset;
 		Partition part;
 
 		if (!readerPM)
-			offset = (i+1)*be(m_block0.sbBlkSize);
+			offset = (i+1)*blockSize;
 		else
-			offset = i*be(m_block0.sbBlkSize);
+			offset = i*blockSize;
 		
 		if (!readerPM)
-			readerBlock0->read(&dpme, sizeof(dpme), offset);
+			m_reader->read(&dpme, sizeof(dpme), offset);
 		else
 			readerPM->read(&dpme, sizeof(dpme), offset);
 		
 		if (be(dpme.dpme_signature) != DPME_SIGNATURE)
 			continue;
 		
-		//std::cout << "Partition #" << (i+1) << " type: " << dpme.dpme_type << std::endl;
+		std::cout << "Partition #" << (i+1) << " type: " << dpme.dpme_type << std::endl;
 		part.name = dpme.dpme_name;
 		part.type = dpme.dpme_type;
-		part.offset = uint64_t(be(dpme.dpme_pblock_start)) * be(m_block0.sbBlkSize);
-		part.size = uint64_t(be(dpme.dpme_pblocks)) * be(m_block0.sbBlkSize);
+		part.offset = uint64_t(be(dpme.dpme_pblock_start)) * blockSize;
+		part.size = uint64_t(be(dpme.dpme_pblocks)) * blockSize;
 		
 		m_partitions.push_back(part);
 	}
