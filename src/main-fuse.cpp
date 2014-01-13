@@ -9,6 +9,7 @@
 #include "HFSVolume.h"
 #include "HFSCatalogBTree.h"
 #include "AppleDisk.h"
+#include "GPTDisk.h"
 #include "DMGDisk.h"
 #include "FileReader.h"
 
@@ -86,6 +87,8 @@ void openDisk(const char* path)
 
 	if (DMGDisk::isDMG(g_fileReader))
 		g_partitions = new DMGDisk(g_fileReader);
+	else if (GPTDisk::isGPTDisk(g_fileReader))
+		g_partitions = new GPTDisk(g_fileReader);
 	else if (AppleDisk::isAppleDisk(g_fileReader))
 		g_partitions = new AppleDisk(g_fileReader);
 	else if (HFSVolume::isHFSPlus(g_fileReader))

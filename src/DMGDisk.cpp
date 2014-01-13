@@ -8,6 +8,7 @@
 #include <memory>
 #include "DMGPartition.h"
 #include "AppleDisk.h"
+#include "GPTDisk.h"
 
 DMGDisk::DMGDisk(Reader* reader)
 	: m_reader(reader)
@@ -72,14 +73,21 @@ void DMGDisk::loadKoly(const UDIFResourceFile& koly)
 	xmlXPathFreeContext(xpathContext);
 #else
 	Reader *rm1, *r1;
-	AppleDisk* adisk;
+	PartitionedDisk* pdisk;
 
 	rm1 = readerForPartition(-1);
 	r1 = readerForPartition(0);
 
-	adisk = new AppleDisk(rm1, r1);
-	m_partitions = adisk->partitions();
-	delete adisk;
+	if (AppleDisk::isAppleDisk(rm1))
+		pdisk = new AppleDisk(rm1, r1);
+	else if (GPTDisk::isGPTDisk(rm1))
+		pdisk = new GPTDisk(rm1); // TODO! second argument
+	else
+		throw std::runtime_error("Unknown partition table type");
+
+	m_partitions = pdisk->partitions();
+
+	delete pdisk;
 	delete rm1;
 	delete r1;
 #endif

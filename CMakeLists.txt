@@ -32,6 +32,8 @@ add_executable(darling-dmg
 	src/DMGPartition.cpp
 	src/DMGDecompressor.cpp
 	src/adc.cpp
+
+	src/GPTDisk.cpp
 	
 	src/MacBinary.cpp
 )
