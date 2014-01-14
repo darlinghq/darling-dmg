@@ -34,6 +34,25 @@ struct GPTHeader
 	// TODO
 };
 
+struct GUID
+{
+	uint32_t data1;
+	uint16_t data2, data3;
+	uint8_t data4[8];
+};
+
+struct GPTPartition
+{
+	GUID typeGUID;
+	GUID partitionGUID;
+	uint64_t firstLBA, lastLBA;
+	uint64_t flags;
+	uint16_t name[36];
+};
+
+#define GUID_EMPTY "00000000-0000-0000-0000-000000000000"
+#define GUID_HFSPLUS "48465300-0000-11AA-AA11-00306543ECAC"
+
 #pragma pack()
 
 #endif

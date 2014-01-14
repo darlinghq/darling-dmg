@@ -62,6 +62,8 @@ int main(int argc, char** argv)
 	
 		args[argi] = nullptr;
 	
+		std::cout << "Everything looks OK, disk mounted\n";
+
 		rv = fuse_main(argc, args, &ops, 0);
 	}
 	catch (const std::exception& e)

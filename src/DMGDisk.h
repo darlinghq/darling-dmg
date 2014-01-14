@@ -22,10 +22,12 @@ private:
 	static bool parseNameAndType(const std::string& nameAndType, std::string& name, std::string& type);
 	static bool base64Decode(const std::string& input, std::vector<uint8_t>& output);
 	BLKXTable* loadBLKXTableForPartition(int index);
+	Reader* readerForKolyBlock(int index);
 private:
 	Reader* m_reader;
 	std::vector<Partition> m_partitions;
 	xmlDocPtr m_kolyXML;
+	int m_blkxBlocks;
 };
 
 #endif

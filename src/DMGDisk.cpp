@@ -72,16 +72,21 @@ void DMGDisk::loadKoly(const UDIFResourceFile& koly)
 	xmlXPathFreeObject(xpathObj);
 	xmlXPathFreeContext(xpathContext);
 #else
-	Reader *rm1, *r1;
+	Reader *rm1 = nullptr, *r1 = nullptr;
 	PartitionedDisk* pdisk;
 
-	rm1 = readerForPartition(-1);
-	r1 = readerForPartition(0);
+	rm1 = readerForKolyBlock(-1);
 
 	if (AppleDisk::isAppleDisk(rm1))
+	{
+		r1 = readerForKolyBlock(0);
 		pdisk = new AppleDisk(rm1, r1);
+	}
 	else if (GPTDisk::isGPTDisk(rm1))
-		pdisk = new GPTDisk(rm1); // TODO! second argument
+	{
+		r1 = readerForKolyBlock(1);
+		pdisk = new GPTDisk(rm1, r1);
+	}
 	else
 		throw std::runtime_error("Unknown partition table type");
 
@@ -128,6 +133,8 @@ void DMGDisk::loadPartitionElements(xmlXPathContextPtr xpathContext, xmlNodeSetP
 		xmlXPathFreeObject(xpathObj);
 		//delete table;
 	}
+	
+	m_blkxBlocks = nodes->nodeNr;
 }
 
 bool DMGDisk::parseNameAndType(const std::string& nameAndType, std::string& name, std::string& type)
@@ -162,7 +169,7 @@ BLKXTable* DMGDisk::loadBLKXTableForPartition(int index)
 	xpathContext = xmlXPathNewContext(m_kolyXML);
 	xpathObj = xmlXPathEvalExpression((const xmlChar*) expr, xpathContext);
 
-	if (xpathObj && xpathObj->stringval)
+	if (xpathObj && xpathObj->stringval && *xpathObj->stringval)
 	{
 		// load data from base64
 		std::vector<uint8_t> data;
@@ -201,10 +208,27 @@ bool DMGDisk::base64Decode(const std::string& input, std::vector<uint8_t>& outpu
 
 Reader* DMGDisk::readerForPartition(int index)
 {
+	for (int i = -1;; i++)
+	{
+		BLKXTable* table = loadBLKXTableForPartition(i);
+		
+		if (!table)
+			return nullptr;
+		
+		if (be(table->firstSectorNumber)*512 == m_partitions[index].offset)
+			return new DMGPartition(m_reader, table);
+		
+		delete table;
+	}
+	
+	return nullptr;
+}
+
+Reader* DMGDisk::readerForKolyBlock(int index)
+{
 	BLKXTable* table = loadBLKXTableForPartition(index);
 	if (!table)
 		return nullptr;
-	
 	return new DMGPartition(m_reader, table);
 }
 
