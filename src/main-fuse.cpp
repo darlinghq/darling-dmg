@@ -186,6 +186,8 @@ static bool string_endsWith(const std::string& str, const std::string& what)
 
 int hfs_getattr(const char* path, struct stat* stat)
 {
+	std::cerr << "hfs_getattr(" << path << ")\n";
+	
 	HFSPlusCatalogFileOrFolder ff;
 	std::string spath = path;
 	int rv;
@@ -201,12 +203,16 @@ int hfs_getattr(const char* path, struct stat* stat)
 
 	if (rv == 0)
 		hfs_nativeToStat(ff, stat, resourceFork);
+	
+	std::cout << "hfs_getattr() -> " << rv << std::endl;
 
 	return rv;
 }
 
 int hfs_readlink(const char* path, char* buf, size_t size)
 {
+	std::cerr << "hfs_readlink(" << path << ")\n";
+	
 	Reader* file;
 	int rv = g_tree->openFile(path, &file);
 	if (rv == 0)
@@ -221,6 +227,8 @@ int hfs_readlink(const char* path, char* buf, size_t size)
 
 int hfs_open(const char* path, struct fuse_file_info* info)
 {
+	std::cerr << "hfs_open(" << path << ")\n";
+	
 	Reader* file;
 	std::string spath = path;
 	int rv;
@@ -272,6 +280,7 @@ void processResourceForks(std::map<std::string, HFSPlusCatalogFileOrFolder>& con
 
 int hfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info* info)
 {
+	std::cerr << "hfs_readdir(" << path << ")\n";
 	std::map<std::string, HFSPlusCatalogFileOrFolder> contents;
 	int rv = g_tree->listDirectory(path, contents);
 	
@@ -296,6 +305,8 @@ int hfs_getxattr(const char* path, const char* name, char* value, size_t vlen)
 {
 	int rv;
 	std::string spath = path;
+	
+	std::cerr << "hfs_getxattr(" << path << ", " << name << ")\n";
 	
 	if (string_endsWith(spath, RESOURCE_FORK_SUFFIX))
 		spath.resize(spath.length() - strlen(RESOURCE_FORK_SUFFIX));
