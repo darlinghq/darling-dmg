@@ -50,6 +50,7 @@ void DMGDisk::loadKoly(const UDIFResourceFile& koly)
 	xmlXPathContextPtr xpathContext;
 	xmlXPathObjectPtr xpathObj;
 	uint64_t offset, length;
+	bool simpleWayOK = false;
 
 	offset = be(koly.fUDIFXMLOffset);
 	length = be(koly.fUDIFXMLLength);
@@ -59,7 +60,7 @@ void DMGDisk::loadKoly(const UDIFResourceFile& koly)
 
 	m_kolyXML = xmlParseMemory(xmlData.get(), length);
 
-#if 0 // Asian copies of OS X put crap UTF characters into XML data making type/name parsing unreliable
+//#if 0 // Asian copies of OS X put crap UTF characters into XML data making type/name parsing unreliable
 	xpathContext = xmlXPathNewContext(m_kolyXML);
 
 	// select all partition dictionaries with partition ID >= 0
@@ -67,38 +68,42 @@ void DMGDisk::loadKoly(const UDIFResourceFile& koly)
 			"/following-sibling::array[1]/dict[key[text()='ID']/following-sibling::string[text() >= 0]]", xpathContext);
 
 	if (xpathObj && xpathObj->nodesetval)
-		loadPartitionElements(xpathContext, xpathObj->nodesetval);
+		simpleWayOK = loadPartitionElements(xpathContext, xpathObj->nodesetval);
 	
 	xmlXPathFreeObject(xpathObj);
 	xmlXPathFreeContext(xpathContext);
-#else
-	Reader *rm1 = nullptr, *r1 = nullptr;
-	PartitionedDisk* pdisk;
-
-	rm1 = readerForKolyBlock(-1);
-
-	if (AppleDisk::isAppleDisk(rm1))
+//#else
+	
+	if (!simpleWayOK)
 	{
-		r1 = readerForKolyBlock(0);
-		pdisk = new AppleDisk(rm1, r1);
-	}
-	else if (GPTDisk::isGPTDisk(rm1))
-	{
-		r1 = readerForKolyBlock(1);
-		pdisk = new GPTDisk(rm1, r1);
-	}
-	else
-		throw std::runtime_error("Unknown partition table type");
+		Reader *rm1 = nullptr, *r1 = nullptr;
+		PartitionedDisk* pdisk;
 
-	m_partitions = pdisk->partitions();
+		rm1 = readerForKolyBlock(-1);
 
-	delete pdisk;
-	delete rm1;
-	delete r1;
-#endif
+		if (AppleDisk::isAppleDisk(rm1))
+		{
+			r1 = readerForKolyBlock(0); // TODO: this is not always partition 0
+			pdisk = new AppleDisk(rm1, r1);
+		}
+		else if (GPTDisk::isGPTDisk(rm1))
+		{
+			r1 = readerForKolyBlock(1);
+			pdisk = new GPTDisk(rm1, r1);
+		}
+		else
+			throw std::runtime_error("Unknown partition table type");
+
+		m_partitions = pdisk->partitions();
+
+		delete pdisk;
+		delete rm1;
+		delete r1;
+	}
+//#endif
 }
 
-void DMGDisk::loadPartitionElements(xmlXPathContextPtr xpathContext, xmlNodeSetPtr nodes)
+bool DMGDisk::loadPartitionElements(xmlXPathContextPtr xpathContext, xmlNodeSetPtr nodes)
 {
 	for (int i = 0; i < nodes->nodeNr; i++)
 	{
@@ -127,7 +132,8 @@ void DMGDisk::loadPartitionElements(xmlXPathContextPtr xpathContext, xmlNodeSetP
 			part.size = be(table->sectorCount) * 512;
 		}
 
-		parseNameAndType((const char*) xpathObj->stringval, part.name, part.type);
+		if (!parseNameAndType((const char*) xpathObj->stringval, part.name, part.type) && m_partitions.empty())
+			return false;
 		m_partitions.push_back(part);
 
 		xmlXPathFreeObject(xpathObj);
@@ -135,6 +141,8 @@ void DMGDisk::loadPartitionElements(xmlXPathContextPtr xpathContext, xmlNodeSetP
 	}
 	
 	m_blkxBlocks = nodes->nodeNr;
+	
+	return true;
 }
 
 bool DMGDisk::parseNameAndType(const std::string& nameAndType, std::string& name, std::string& type)
@@ -213,7 +221,7 @@ Reader* DMGDisk::readerForPartition(int index)
 		BLKXTable* table = loadBLKXTableForPartition(i);
 		
 		if (!table)
-			return nullptr;
+			continue;
 		
 		if (be(table->firstSectorNumber)*512 == m_partitions[index].offset)
 			return new DMGPartition(m_reader, table);
