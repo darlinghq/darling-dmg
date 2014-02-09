@@ -19,8 +19,11 @@ AppleDisk::AppleDisk(Reader* readerBlock0, Reader* readerPM)
 void AppleDisk::load(Reader* readerPM)
 {
 	size_t blockSize = be(m_block0.sbBlkSize);
+	int lastOK = -1;
 	
-	blockSize = 512;
+	std::cout << "Block size: " << blockSize << std::endl;
+	if (!blockSize)
+		blockSize = 512;
 	
 	m_reader->read(&m_block0, sizeof(m_block0), 0);
 	
@@ -51,8 +54,15 @@ void AppleDisk::load(Reader* readerPM)
 		part.type = dpme.dpme_type;
 		part.offset = uint64_t(be(dpme.dpme_pblock_start)) * blockSize;
 		part.size = uint64_t(be(dpme.dpme_pblocks)) * blockSize;
+		std::cout << "\tBlock start: " << uint64_t(be(dpme.dpme_pblock_start)) << std::endl;
 		
 		m_partitions.push_back(part);
+		
+		// block size guessing when sbBlkSize == 0
+		if (lastOK != i-1 && !m_block0.sbBlkSize)
+			blockSize *= i - lastOK;
+		
+		lastOK = i;
 	}
 }
 

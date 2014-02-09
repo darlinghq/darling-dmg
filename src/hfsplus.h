@@ -275,6 +275,12 @@ struct HFSPlusExtentKey
 	uint32_t startBlock;
 };
 
+enum {
+	kHFSPlusAttrInlineData  = 0x10,
+	kHFSPlusAttrForkData    = 0x20,
+	kHFSPlusAttrExtents     = 0x30
+};
+
 #pragma pack()
 
 #endif

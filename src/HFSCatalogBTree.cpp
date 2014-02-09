@@ -39,7 +39,7 @@ int HFSCatalogBTree::caseInsensitiveComparator(const Key* indexKey, const Key* d
 	desiredName = UnicodeString((char*)catDesiredKey->nodeName.string, be(catDesiredKey->nodeName.length)*2, "UTF-16BE");
 	indexName = UnicodeString((char*)catIndexKey->nodeName.string, be(catIndexKey->nodeName.length)*2, "UTF-16BE");
 
-	//if (desiredName.length() > 0)
+	//if (indexName.length() > 0 || be(catIndexKey->parentID) != kHFSRootParentID)
 	{
 		std::string des, idx;
 		desiredName.toUTF8String(des);

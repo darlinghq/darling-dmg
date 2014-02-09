@@ -14,7 +14,7 @@ HFSBTree::HFSBTree(HFSFork* fork)
 {
 	BTNodeDescriptor desc0;
 	
-	//std::cout << "Tree size: " << fork->length() << std::endl;
+	std::cout << "Tree size: " << fork->length() << std::endl;
 	m_tree = new char[fork->length()];
 	if (fork->read(m_tree, fork->length(), 0) != fork->length())
 		throw std::runtime_error("Failed to read the BTree header");
@@ -28,6 +28,8 @@ HFSBTree::HFSBTree(HFSFork* fork)
 	
 	std::cout << "leaf records: " << be(m_header.leafRecords) << std::endl;
 	std::cout << "node size: " << be(m_header.nodeSize) << std::endl;
+	std::cout << "first leaf node: " << be(m_header.firstLeafNode) << std::endl;
+	std::cout << "last leaf node: " << be(m_header.lastLeafNode) << std::endl;
 	
 	/*if (m_header.rootNode)
 	{
@@ -79,6 +81,7 @@ std::vector<HFSBTreeNode> HFSBTree::findLeafNodes(const Key* indexKey, KeyCompar
 
 HFSBTreeNode HFSBTree::traverseTree(int nodeIndex, const Key* indexKey, KeyComparator comp, bool wildcard)
 {
+	std::cout << "Examining node " << nodeIndex << std::endl;
 	HFSBTreeNode node(m_tree, nodeIndex, be(m_header.nodeSize));
 
 	switch (node.kind())
@@ -120,6 +123,9 @@ HFSBTreeNode HFSBTree::traverseTree(int nodeIndex, const Key* indexKey, KeyCompa
 		case NodeKind::kBTHeaderNode:
 		case NodeKind::kBTMapNode:
 			break;
+		default:
+			std::cerr << "Invalid node kind! Kind: " << int(node.kind()) << std::endl;
+			
 	}
 
 	return HFSBTreeNode();
