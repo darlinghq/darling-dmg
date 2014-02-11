@@ -1,6 +1,6 @@
 #include "SubReader.h"
 
-SubReader::SubReader(Reader* parent, uint64_t offset, uint64_t size)
+SubReader::SubReader(std::shared_ptr<Reader> parent, uint64_t offset, uint64_t size)
 : m_parent(parent), m_offset(offset), m_size(size)
 {
 }

@@ -3,7 +3,7 @@
 #include "be.h"
 #include <stdexcept>
 
-MacBinary::MacBinary(Reader* reader)
+MacBinary::MacBinary(std::shared_ptr<Reader> reader)
 	: m_reader(reader)
 {
 	if (m_reader->read(&m_header, sizeof(m_header), 0) != sizeof(m_header))

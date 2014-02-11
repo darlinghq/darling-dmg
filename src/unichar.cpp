@@ -26,3 +26,10 @@ bool EqualCase(const HFSString& str1, const std::string& str2)
 	return ustr == ustr2;
 }
 
+uint16_t StringToUnichar(const std::string& in, unichar* out, size_t maxLength)
+{
+	UnicodeString str = UnicodeString::fromUTF8(in);
+	auto bytes = str.extract(0, in.length(), (char*) out, maxLength*sizeof(unichar), "UTF-16BE");
+	
+	return bytes / sizeof(unichar);
+}

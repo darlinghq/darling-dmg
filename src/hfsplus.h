@@ -20,6 +20,8 @@ typedef uint32_t HFSCatalogNodeID;
 #define HFSPLUS_S_IFSOCK 0140000	/* socket */
 #define HFSPLUS_S_IFWHT  0160000	/* whiteout */
 
+#define HFS_PERM_OFLAG_COMPRESSED 0x20
+
 struct HFSString
 {
 	uint16_t length;
@@ -275,10 +277,29 @@ struct HFSPlusExtentKey
 	uint32_t startBlock;
 };
 
-enum {
+struct HFSPlusAttributeKey
+{
+	uint16_t keyLength;
+	uint16_t padding;
+	HFSCatalogNodeID fileID;
+	uint32_t startBlock; // first allocation block number for extents
+	uint16_t attrNameLength;
+	uint16_t attrName[127];
+};
+
+enum
+{
 	kHFSPlusAttrInlineData  = 0x10,
 	kHFSPlusAttrForkData    = 0x20,
 	kHFSPlusAttrExtents     = 0x30
+};
+
+struct HFSPlusAttributeDataInline
+{
+	uint32_t recordType; // kHFSPlusAttrInlineData
+	uint64_t reserved;
+	uint32_t attrSize;
+	uint8_t attrData[];
 };
 
 #pragma pack()

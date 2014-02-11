@@ -12,7 +12,7 @@
 class DMGDecompressor_Zlib : public DMGDecompressor
 {
 public:
-	DMGDecompressor_Zlib(Reader* reader);
+	DMGDecompressor_Zlib(std::shared_ptr<Reader> reader);
 	~DMGDecompressor_Zlib();
 	virtual int32_t decompress(void* output, int32_t outputBytes) override;
 private:
@@ -22,7 +22,7 @@ private:
 class DMGDecompressor_Bzip2 : public DMGDecompressor
 {
 public:
-	DMGDecompressor_Bzip2(Reader* reader);
+	DMGDecompressor_Bzip2(std::shared_ptr<Reader> reader);
 	~DMGDecompressor_Bzip2();
 	virtual int32_t decompress(void* output, int32_t outputBytes) override;
 private:
@@ -32,16 +32,16 @@ private:
 class DMGDecompressor_ADC : public DMGDecompressor
 {
 public:
-	DMGDecompressor_ADC(Reader* reader) : DMGDecompressor(reader) {}
+	DMGDecompressor_ADC(std::shared_ptr<Reader> reader) : DMGDecompressor(reader) {}
 	virtual int32_t decompress(void* output, int32_t outputBytes) override;
 };
 
-DMGDecompressor::DMGDecompressor(Reader* reader)
+DMGDecompressor::DMGDecompressor(std::shared_ptr<Reader> reader)
 	: m_reader(reader), m_pos(0)
 {
 }
 
-DMGDecompressor* DMGDecompressor::create(RunType runType, Reader* reader)
+DMGDecompressor* DMGDecompressor::create(RunType runType, std::shared_ptr<Reader> reader)
 {
 	switch (runType)
 	{
@@ -73,7 +73,7 @@ void DMGDecompressor::processed(int bytes)
 	std::cout << "Processed: " << bytes << ", total: " << m_pos << std::endl;
 }
 
-DMGDecompressor_Zlib::DMGDecompressor_Zlib(Reader* reader)
+DMGDecompressor_Zlib::DMGDecompressor_Zlib(std::shared_ptr<Reader> reader)
 	: DMGDecompressor(reader)
 {
 	memset(&m_strm, 0, sizeof(m_strm));
@@ -123,7 +123,7 @@ int32_t DMGDecompressor_Zlib::decompress(void* output, int32_t outputBytes)
 	return done;
 }
 
-DMGDecompressor_Bzip2::DMGDecompressor_Bzip2(Reader* reader)
+DMGDecompressor_Bzip2::DMGDecompressor_Bzip2(std::shared_ptr<Reader> reader)
 	: DMGDecompressor(reader)
 {
 	memset(&m_strm, 0, sizeof(m_strm));

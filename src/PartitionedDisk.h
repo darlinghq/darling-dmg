@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <string>
 #include <vector>
+#include <memory>
 
 class PartitionedDisk
 {
@@ -17,7 +18,7 @@ public:
 	virtual ~PartitionedDisk() {}
 
 	virtual const std::vector<Partition>& partitions() const = 0;
-	virtual Reader* readerForPartition(int index) = 0;
+	virtual std::shared_ptr<Reader> readerForPartition(int index) = 0;
 };
 
 #endif

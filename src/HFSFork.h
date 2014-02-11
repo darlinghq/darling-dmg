@@ -17,7 +17,7 @@ private:
 	void loadFromOverflowsFile(uint32_t blocksSoFar);
 private:
 	HFSVolume* m_volume;
-	const HFSPlusForkData& m_fork;
+	HFSPlusForkData m_fork;
 	std::vector<HFSPlusExtentDescriptor> m_extents;
 
 	HFSCatalogNodeID m_cnid;

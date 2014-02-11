@@ -6,13 +6,13 @@
 #include "gpt.h"
 #include "SubReader.h"
 
-GPTDisk::GPTDisk(Reader* reader)
+GPTDisk::GPTDisk(std::shared_ptr<Reader> reader)
 : m_reader(reader)
 {
 	loadPartitions(nullptr);
 }
 
-GPTDisk::GPTDisk(Reader* protectiveMBR, Reader* partitionTable)
+GPTDisk::GPTDisk(std::shared_ptr<Reader> protectiveMBR, std::shared_ptr<Reader> partitionTable)
 	: m_reader(nullptr)
 {
 	if (!isGPTDisk(protectiveMBR))
@@ -20,7 +20,7 @@ GPTDisk::GPTDisk(Reader* protectiveMBR, Reader* partitionTable)
 	loadPartitions(partitionTable);
 }
 
-bool GPTDisk::isGPTDisk(Reader* reader)
+bool GPTDisk::isGPTDisk(std::shared_ptr<Reader> reader)
 {
 	ProtectiveMBR mbr;
 	reader->read(&mbr, sizeof(mbr), 0);
@@ -54,7 +54,7 @@ std::string GPTDisk::makeGUID(const GUID& guid)
 	return ss.str();
 }
 
-void GPTDisk::loadPartitions(Reader* table)
+void GPTDisk::loadPartitions(std::shared_ptr<Reader> table)
 {
 	uint64_t offset;
 	int32_t rd;
@@ -95,9 +95,9 @@ void GPTDisk::loadPartitions(Reader* table)
 	}
 }
 
-Reader* GPTDisk::readerForPartition(int index)
+std::shared_ptr<Reader> GPTDisk::readerForPartition(int index)
 {
 	const Partition& part = m_partitions.at(index);
-	return new SubReader(m_reader, part.offset, part.size);
+	return std::shared_ptr<Reader>(new SubReader(m_reader, part.offset, part.size));
 }
 

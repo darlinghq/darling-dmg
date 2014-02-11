@@ -11,7 +11,7 @@
 
 static const int SECTOR_SIZE = 512;
 
-DMGPartition::DMGPartition(Reader* disk, BLKXTable* table)
+DMGPartition::DMGPartition(std::shared_ptr<Reader> disk, BLKXTable* table)
 : m_disk(disk), m_table(table)
 {
 	for (uint32_t i = 0; i < be(m_table->blocksRunCount); i++)
@@ -93,11 +93,11 @@ int32_t DMGPartition::readRun(void* buf, int32_t runIndex, uint64_t offsetInSect
 		case RunType::ADC:
 		{
 			std::unique_ptr<DMGDecompressor> decompressor;
-			std::unique_ptr<Reader> subReader;
+			std::shared_ptr<Reader> subReader;
 			uint32_t done = 0;
 			
 			subReader.reset(new SubReader(m_disk, be(run->compOffset) + be(m_table->dataStart), be(run->compLength)));
-			decompressor.reset(DMGDecompressor::create(runType, subReader.get()));
+			decompressor.reset(DMGDecompressor::create(runType, subReader));
 			
 			if (!decompressor)
 				throw std::logic_error("DMGDecompressor::create() returned nullptr!");

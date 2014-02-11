@@ -12,12 +12,18 @@
 #include "GPTDisk.h"
 #include "DMGDisk.h"
 #include "FileReader.h"
+#include "MemoryReader.h"
+#include "HFSZlibReader.h"
+#include "HFSAttributeBTree.h"
+#include "DMGDecompressor.h"
+#include "ResourceFork.h"
+#include "decmpfs.h"
 
 static const char* RESOURCE_FORK_SUFFIX = "#..namedfork#rsrc";
 static const char* XATTR_RESOURCE_FORK = "com.apple.ResourceFork";
 static const char* XATTR_FINDER_INFO = "com.apple.FinderInfo";
 
-Reader* g_fileReader;
+std::shared_ptr<Reader> g_fileReader;
 PartitionedDisk* g_partitions;
 HFSVolume* g_volume;
 HFSCatalogBTree* g_tree;
@@ -75,7 +81,6 @@ int main(int argc, char** argv)
 	delete g_tree;
 	delete g_volume;
 	delete g_partitions;
-	delete g_fileReader;
 	delete [] args;
 	
 	return rv;
@@ -85,7 +90,7 @@ void openDisk(const char* path)
 {
 	int partIndex = -1;
 
-	g_fileReader = new FileReader(path);
+	g_fileReader.reset(new FileReader(path));
 
 	if (DMGDisk::isDMG(g_fileReader))
 		g_partitions = new DMGDisk(g_fileReader);
@@ -184,82 +189,212 @@ static bool string_endsWith(const std::string& str, const std::string& what)
 		return str.compare(str.size()-what.size(), what.size(), what) == 0;
 }
 
+decmpfs_disk_header* get_decmpfs(HFSCatalogNodeID cnid, std::vector<uint8_t>& holder)
+{
+	HFSAttributeBTree* attributes = g_volume->attributes();
+	decmpfs_disk_header* hdr;
+	
+	if (!attributes)
+		return nullptr;
+	
+	if (!attributes->getattr(cnid, DECMPFS_XATTR_NAME, holder))
+		return nullptr;
+	
+	if (holder.size() < 16)
+		return nullptr;
+	
+	hdr = (decmpfs_disk_header*) &holder[0];
+	if (hdr->compression_magic != DECMPFS_MAGIC)
+		return nullptr;
+	
+	return hdr;
+}
+
 int hfs_getattr(const char* path, struct stat* stat)
 {
 	std::cerr << "hfs_getattr(" << path << ")\n";
 	
-	HFSPlusCatalogFileOrFolder ff;
-	std::string spath = path;
-	int rv;
-	bool resourceFork = false;
-	
-	if (string_endsWith(path, RESOURCE_FORK_SUFFIX))
+	try
 	{
-		spath.resize(spath.length() - strlen(RESOURCE_FORK_SUFFIX));
-		resourceFork = true;
+		HFSPlusCatalogFileOrFolder ff;
+		std::string spath = path;
+		int rv;
+		bool resourceFork = false;
+		
+		if (string_endsWith(path, RESOURCE_FORK_SUFFIX))
+		{
+			spath.resize(spath.length() - strlen(RESOURCE_FORK_SUFFIX));
+			resourceFork = true;
+		}
+		
+		rv = g_tree->stat(spath.c_str(), &ff);
+
+		if (rv == 0)
+		{
+			hfs_nativeToStat(ff, stat, resourceFork);
+			
+			// Compressed FS support
+			if ((ff.file.permissions.ownerFlags & HFS_PERM_OFLAG_COMPRESSED) && !stat->st_size)
+			{
+				decmpfs_disk_header* hdr;
+				std::vector<uint8_t> xattrData;
+				
+				hdr = get_decmpfs(ff.file.fileID, xattrData);
+				
+				if (hdr != nullptr)
+					stat->st_size = hdr->uncompressed_size;
+			}
+		}
+		
+		std::cout << "hfs_getattr() -> " << rv << std::endl;
+
+		return rv;
 	}
-	
-	rv = g_tree->stat(spath.c_str(), &ff);
-
-	if (rv == 0)
-		hfs_nativeToStat(ff, stat, resourceFork);
-	
-	std::cout << "hfs_getattr() -> " << rv << std::endl;
-
-	return rv;
+	catch (const std::exception& e)
+	{
+		std::cerr << "ERROR: " << e.what() << std::endl;
+		return -EIO;
+	}
 }
 
 int hfs_readlink(const char* path, char* buf, size_t size)
 {
-	std::cerr << "hfs_readlink(" << path << ")\n";
-	
-	Reader* file;
-	int rv = g_tree->openFile(path, &file);
-	if (rv == 0)
+	try
 	{
-		int rd = file->read(buf, size, 0);
-		buf[rd] = 0;
+		std::cerr << "hfs_readlink(" << path << ")\n";
+		
+		std::shared_ptr<Reader> file;
+		int rv = g_tree->openFile(path, file);
+		if (rv == 0)
+		{
+			int rd = file->read(buf, size, 0);
+			buf[rd] = 0;
+		}
+		
+		return rv;
 	}
-	
-	delete file;
-	return rv;
+	catch (const std::exception& e)
+	{
+		std::cerr << "ERROR: " << e.what() << std::endl;
+		return -EIO;
+	}
 }
 
 int hfs_open(const char* path, struct fuse_file_info* info)
 {
-	std::cerr << "hfs_open(" << path << ")\n";
-	
-	Reader* file;
-	std::string spath = path;
-	int rv;
-	bool resourceFork = false;
-	
-	if (string_endsWith(path, RESOURCE_FORK_SUFFIX))
+	try
 	{
-		spath.resize(spath.length() - strlen(RESOURCE_FORK_SUFFIX));
-		resourceFork = true;
-	}
-	
-	rv = g_tree->openFile(spath.c_str(), &file, resourceFork);
+		std::cerr << "hfs_open(" << path << ")\n";
+		
+		std::shared_ptr<Reader> file;
+		std::string spath = path;
+		int rv = 0;
+		bool resourceFork = false, compressed = false;
+		HFSPlusCatalogFileOrFolder ff;
+		
+		if (string_endsWith(path, RESOURCE_FORK_SUFFIX))
+		{
+			spath.resize(spath.length() - strlen(RESOURCE_FORK_SUFFIX));
+			resourceFork = true;
+		}
+		
+		if (!resourceFork)
+		{
+			// stat
+			rv = g_tree->stat(spath.c_str(), &ff);
+			compressed = ff.file.permissions.ownerFlags & HFS_PERM_OFLAG_COMPRESSED;
+		}
 
-	if (rv == 0)
-		info->fh = uint64_t(file);
-	
-	return rv;
+		if (rv != 0)
+			return rv;
+		
+		if (!compressed)
+			rv = g_tree->openFile(spath.c_str(), file, resourceFork);
+		else
+		{
+			decmpfs_disk_header* hdr;
+			std::vector<uint8_t> holder;
+			
+			hdr = get_decmpfs(ff.file.fileID, holder);
+			
+			if (!hdr)
+				rv = -ENOENT;
+			else
+			{
+				std::cout << "Opening compressed file, compression type: " << int(hdr->compression_type) << std::endl;
+				switch (DecmpfsCompressionType(hdr->compression_type))
+				{
+					case DecmpfsCompressionType::UncompressedInline:
+						file.reset(new MemoryReader(hdr->attr_bytes, hdr->uncompressed_size));
+						rv = 0;
+						break;
+					case DecmpfsCompressionType::CompressedInline:
+						file.reset(new MemoryReader(hdr->attr_bytes, holder.size() - 16));
+						file.reset(new HFSZlibReader(file, hdr->uncompressed_size));
+						rv = 0;
+						break;
+					case DecmpfsCompressionType::CompressedResourceFork:
+					{
+						rv = g_tree->openFile(spath.c_str(), file, true);
+						if (rv == 0)
+						{
+							std::unique_ptr<ResourceFork> rsrc (new ResourceFork(file));
+							file = rsrc->getResource(DECMPFS_MAGIC, DECMPFS_ID);
+							
+							if (file)
+								file.reset(new HFSZlibReader(file, hdr->uncompressed_size));
+							else
+								rv = -ENOSYS;
+						}
+						break;
+					}
+					default:
+						rv = -ENOSYS;
+				}
+			}
+		}
+
+		if (rv == 0)
+			info->fh = uint64_t(new std::shared_ptr<Reader>(file)); // ugly...
+		
+		return rv;
+	}
+	catch (const std::exception& e)
+	{
+		std::cerr << "ERROR: " << e.what() << std::endl;
+		return -EIO;
+	}
 }
 
 int hfs_read(const char* path, char* buf, size_t bytes, off_t offset, struct fuse_file_info* info)
 {
-	Reader* file = (Reader*) info->fh;
-	return file->read(buf, bytes, offset);
+	try
+	{
+		std::shared_ptr<Reader>& file = *(std::shared_ptr<Reader>*) info->fh;
+		return file->read(buf, bytes, offset);
+	}
+	catch (const std::exception& e)
+	{
+		std::cerr << "ERROR: " << e.what() << std::endl;
+		return -EIO;
+	}
 }
 
 int hfs_release(const char* path, struct fuse_file_info* info)
 {
-	Reader* file = (Reader*) info->fh;
-	delete file;
-	info->fh = 0;
-	return 0;
+	try
+	{
+		std::shared_ptr<Reader>* file = (std::shared_ptr<Reader>*) info->fh;
+		delete file;
+		info->fh = 0;
+		
+		return 0;
+	}
+	catch (const std::exception& e)
+	{
+		std::cerr << "ERROR: " << e.what() << std::endl;
+		return -EIO;
+	}
 }
 
 void processResourceForks(std::map<std::string, HFSPlusCatalogFileOrFolder>& contents)
@@ -280,92 +415,140 @@ void processResourceForks(std::map<std::string, HFSPlusCatalogFileOrFolder>& con
 
 int hfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info* info)
 {
-	std::cerr << "hfs_readdir(" << path << ")\n";
-	std::map<std::string, HFSPlusCatalogFileOrFolder> contents;
-	int rv = g_tree->listDirectory(path, contents);
-	
-	//processResourceForks(contents);
-
-	if (rv == 0)
+	try
 	{
-		for (auto it = contents.begin(); it != contents.end(); it++)
+		std::cerr << "hfs_readdir(" << path << ")\n";
+		std::map<std::string, HFSPlusCatalogFileOrFolder> contents;
+		int rv = g_tree->listDirectory(path, contents);
+		
+		//processResourceForks(contents);
+
+		if (rv == 0)
 		{
-			struct stat st;
-			hfs_nativeToStat(it->second, &st, string_endsWith(it->first, RESOURCE_FORK_SUFFIX));
+			for (auto it = contents.begin(); it != contents.end(); it++)
+			{
+				struct stat st;
+				hfs_nativeToStat(it->second, &st, string_endsWith(it->first, RESOURCE_FORK_SUFFIX));
 
-			if (filler(buf, it->first.c_str(), &st, 0) != 0)
-				return -ENOMEM;
+				if (filler(buf, it->first.c_str(), &st, 0) != 0)
+					return -ENOMEM;
+			}
 		}
-	}
 
-	return rv;
+		return rv;
+	}
+	catch (const std::exception& e)
+	{
+		std::cerr << "ERROR: " << e.what() << std::endl;
+		return -EIO;
+	}
 }
 
 int hfs_getxattr(const char* path, const char* name, char* value, size_t vlen)
 {
-	int rv;
-	std::string spath = path;
-	
-	std::cerr << "hfs_getxattr(" << path << ", " << name << ")\n";
-	
-	if (string_endsWith(spath, RESOURCE_FORK_SUFFIX))
-		spath.resize(spath.length() - strlen(RESOURCE_FORK_SUFFIX));
-	
-	if (strcmp(name, XATTR_RESOURCE_FORK) == 0)
+	try
 	{
-		Reader* file;
-
-		rv = g_tree->openFile(spath.c_str(), &file, true);
-		if (rv < 0)
-			return rv;
-	
-		rv = std::min<int>(std::numeric_limits<int>::max(), file->length());
-	
-		if (vlen >= rv)
-			rv = file->read(value, rv, 0);
-	
-		delete file;
-	}
-	else if (strcmp(name, XATTR_FINDER_INFO) == 0)
-	{
-		HFSPlusCatalogFileOrFolder ff;
-	
-		rv = g_tree->stat(spath.c_str(), &ff);
-		if (rv != 0)
-			return rv;
-
-		rv = 32;
-
-		if (vlen >= rv)
+		int rv;
+		std::string spath = path;
+		
+		std::cerr << "hfs_getxattr(" << path << ", " << name << ")\n";
+		
+		if (string_endsWith(spath, RESOURCE_FORK_SUFFIX))
+			spath.resize(spath.length() - strlen(RESOURCE_FORK_SUFFIX));
+		
+		if (strcmp(name, XATTR_RESOURCE_FORK) == 0)
 		{
-			if (ff.file.recordType == RecordType::kHFSPlusFileRecord)
+			std::shared_ptr<Reader> file;
+
+			rv = g_tree->openFile(spath.c_str(), file, true);
+			if (rv < 0)
+				return rv;
+		
+			rv = std::min<int>(std::numeric_limits<int>::max(), file->length());
+		
+			if (vlen >= rv)
+				rv = file->read(value, rv, 0);
+		}
+		else if (strcmp(name, XATTR_FINDER_INFO) == 0)
+		{
+			HFSPlusCatalogFileOrFolder ff;
+		
+			rv = g_tree->stat(spath.c_str(), &ff);
+			if (rv != 0)
+				return rv;
+
+			rv = 32;
+
+			if (vlen >= rv)
 			{
-				memcpy(value, &ff.file.userInfo, sizeof(ff.file.userInfo));
-				memcpy(value + sizeof(ff.file.userInfo), &ff.file.finderInfo, sizeof(ff.file.finderInfo));
-			}
-			else
-			{
-				memcpy(value, &ff.folder.userInfo, sizeof(ff.folder.userInfo));
-				memcpy(value + sizeof(ff.folder.userInfo), &ff.folder.finderInfo, sizeof(ff.folder.finderInfo));
+				if (ff.file.recordType == RecordType::kHFSPlusFileRecord)
+				{
+					memcpy(value, &ff.file.userInfo, sizeof(ff.file.userInfo));
+					memcpy(value + sizeof(ff.file.userInfo), &ff.file.finderInfo, sizeof(ff.file.finderInfo));
+				}
+				else
+				{
+					memcpy(value, &ff.folder.userInfo, sizeof(ff.folder.userInfo));
+					memcpy(value + sizeof(ff.folder.userInfo), &ff.folder.finderInfo, sizeof(ff.folder.finderInfo));
+				}
 			}
 		}
+		else
+		{
+			HFSPlusCatalogFileOrFolder ff;
+			std::vector<uint8_t> data;
+			
+			// get CNID
+			rv = g_tree->stat(spath.c_str(), &ff);
+			
+			if (rv != 0)
+				return rv;
+			
+			if (g_volume->attributes()->getattr(ff.file.fileID, name, data))
+			{
+				if (vlen >= data.size())
+					memcpy(value, &data[0], data.size());
+			
+				rv = data.size();
+			}
+			else
+				rv = -ENODATA;
+		}
+		
+		return rv;
 	}
-	else
-		return -ENODATA;
-	
-	return rv;
+	catch (const std::exception& e)
+	{
+		std::cerr << "ERROR: " << e.what() << std::endl;
+		return -EIO;
+	}
+}
+
+inline void insertString(std::vector<char>& dst, const char* str)
+{
+	dst.insert(dst.end(), str, str+strlen(str)+1);
 }
 
 int hfs_listxattr(const char* path, char* buffer, size_t size)
 {
-	int rflen = strlen(XATTR_RESOURCE_FORK)+1;
-	int filen = strlen(XATTR_FINDER_INFO)+1;
-
-	if (size >= rflen+filen)
-	{
-		strcpy(buffer, XATTR_RESOURCE_FORK);
-		strcpy(buffer+rflen, XATTR_FINDER_INFO);
-	}
+	std::vector<char> output;
+	HFSPlusCatalogFileOrFolder ff;
+	int rv;
 	
-	return rflen+filen;
+	insertString(output, XATTR_RESOURCE_FORK);
+	insertString(output, XATTR_FINDER_INFO);
+	
+	// get CNID
+	rv = g_tree->stat(path, &ff);
+	
+	if (rv != 0)
+		return rv;
+	
+	for (const auto& kv : g_volume->attributes()->getattr(ff.file.fileID))
+		insertString(output, kv.first.c_str());
+	
+	if (size >= output.size())
+		memcpy(buffer, &output[0], output.size());
+	
+	return output.size();
 }

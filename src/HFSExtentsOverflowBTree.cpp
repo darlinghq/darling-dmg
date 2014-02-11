@@ -27,6 +27,8 @@ void HFSExtentsOverflowBTree::findExtentsForFile(HFSCatalogNodeID cnid, bool res
 
 			if (recordKey->forkType != key.forkType || be(recordKey->fileID) != cnid)
 				continue;
+			
+			std::cout << "Examining extra extents from startBlock " << be(recordKey->startBlock) << std::endl;
 			if (be(recordKey->startBlock) < startBlock) // skip descriptors already contained in the extents file
 				continue;
 
@@ -43,7 +45,10 @@ void HFSExtentsOverflowBTree::findExtentsForFile(HFSCatalogNodeID cnid, bool res
 			for (int x = 0; x < 8; x++)
 			{
 				if (!extents[x].blockCount)
+				{
+					std::cout << "Extent #" << x << " has zero blockCount\n";
 					break;
+				}
 
 				extraExtents.push_back(HFSPlusExtentDescriptor{ be(extents[x].startBlock), be(extents[x].blockCount) });
 			}

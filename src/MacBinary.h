@@ -2,6 +2,7 @@
 #define MACBINARY_H
 #include <stdint.h>
 #include "Reader.h"
+#include <memory>
 
 #pragma pack(1)
 struct MacBinaryHeader
@@ -32,14 +33,14 @@ struct MacBinaryHeader
 class MacBinary
 {
 public:
-	MacBinary(Reader* reader);
+	MacBinary(std::shared_ptr<Reader> reader);
 
 	Reader* getDataFork();
 	Reader* getResourceFork();
 
 	static bool isMacBinary(Reader* reader);
 private:
-	Reader* m_reader;
+	std::shared_ptr<Reader> m_reader;
 	MacBinaryHeader m_header;
 };
 

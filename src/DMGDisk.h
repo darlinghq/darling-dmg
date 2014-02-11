@@ -9,22 +9,22 @@
 class DMGDisk : public PartitionedDisk
 {
 public:
-	DMGDisk(Reader* reader);
+	DMGDisk(std::shared_ptr<Reader>reader);
 	~DMGDisk();
 
 	virtual const std::vector<Partition>& partitions() const { return m_partitions; }
-	virtual Reader* readerForPartition(int index) override;
+	virtual std::shared_ptr<Reader> readerForPartition(int index) override;
 
-	static bool isDMG(Reader* reader);
+	static bool isDMG(std::shared_ptr<Reader> reader);
 private:
 	void loadKoly(const UDIFResourceFile& koly);
 	bool loadPartitionElements(xmlXPathContextPtr xpathContext, xmlNodeSetPtr nodes);
 	static bool parseNameAndType(const std::string& nameAndType, std::string& name, std::string& type);
 	static bool base64Decode(const std::string& input, std::vector<uint8_t>& output);
 	BLKXTable* loadBLKXTableForPartition(int index);
-	Reader* readerForKolyBlock(int index);
+	std::shared_ptr<Reader> readerForKolyBlock(int index);
 private:
-	Reader* m_reader;
+	std::shared_ptr<Reader> m_reader;
 	std::vector<Partition> m_partitions;
 	xmlDocPtr m_kolyXML;
 	int m_blkxBlocks;

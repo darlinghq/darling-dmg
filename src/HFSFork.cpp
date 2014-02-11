@@ -29,8 +29,8 @@ void HFSFork::loadFromOverflowsFile(uint32_t blocksSoFar)
 	if (!m_cnid)
 		throw std::runtime_error("Cannot search extents file, CNID is kHFSNullID");
 
-	if (oldCount > 8)
-		throw std::runtime_error("Loaded extent count > 8, but appropriate extent not found");
+//	if (oldCount > 8)
+//		throw std::runtime_error("Loaded extent count > 8, but appropriate extent not found");
 	if (oldCount < 8)
 		throw std::runtime_error("Loaded extent count < 8, but appropriate extent not found");
 
@@ -84,9 +84,9 @@ int32_t HFSFork::read(void* buf, int32_t count, uint64_t offset)
 	
 	// start reading blocks
 	extent = firstExtent;
-	while (read < count)
+	while (read < count && read+offset < length())
 	{
-		int32_t thistime = std::min<int64_t>(m_extents[extent].blockCount * uint64_t(blockSize), count-read);
+		int32_t thistime;
 		int32_t reallyRead;
 		uint32_t startBlock;
 		uint64_t volumeOffset;
@@ -96,10 +96,15 @@ int32_t HFSFork::read(void* buf, int32_t count, uint64_t offset)
 		if (extent >= m_extents.size())
 			loadFromOverflowsFile(blocksSoFar);
 		
+		thistime = std::min<int64_t>(m_extents[extent].blockCount * uint64_t(blockSize), count-read);
+		
 		startBlock = m_extents[extent].startBlock;
 		
 		if (extent == firstExtent)
 			startBlock += firstBlockInFirstExtent;
+		
+		if (thistime == 0)
+			throw std::logic_error("Internal error: thistime == 0");
 		
 		std::cout << "Remaining to read: " << count-read << std::endl;
 		std::cout << "Extent " << extent << " has " << m_extents[extent].blockCount << " blocks\n";
@@ -122,6 +127,7 @@ int32_t HFSFork::read(void* buf, int32_t count, uint64_t offset)
 		}
 		
 		blocksSoFar += m_extents[extent].blockCount;
+		std::cout << "Blocks so far: " << blocksSoFar << std::endl;
 		extent++;
 	}
 	

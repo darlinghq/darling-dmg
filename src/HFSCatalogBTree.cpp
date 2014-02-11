@@ -169,15 +169,16 @@ int HFSCatalogBTree::stat(std::string path, HFSPlusCatalogFileOrFolder* s, bool 
 	for (size_t i = 0; i < elems.size(); i++)
 	{
 		const std::string& elem = elems[i];
-		UnicodeString ustr = UnicodeString::fromUTF8(elem);
+		//UnicodeString ustr = UnicodeString::fromUTF8(elem);
 		HFSBTreeNode leafNode;
 		HFSPlusCatalogKey desiredKey;
 		HFSCatalogNodeID parentID = last ? be(last->folder.folderID) : kHFSRootParentID;
 
-		if (ustr.length() > 255) // FIXME: there is a UCS-2 vs UTF-16 issue here!
-			return -ENAMETOOLONG;
+		//if (ustr.length() > 255) // FIXME: there is a UCS-2 vs UTF-16 issue here!
+		//	return -ENAMETOOLONG;
 
-		desiredKey.nodeName.length = ustr.extract(0, ustr.length(), (char*) desiredKey.nodeName.string, "UTF-16BE") / 2;
+		desiredKey.nodeName.length = StringToUnichar(elem, desiredKey.nodeName.string, sizeof(desiredKey.nodeName.string));
+		//desiredKey.nodeName.length = ustr.extract(0, ustr.length(), (char*) desiredKey.nodeName.string, "UTF-16BE") / 2;
 		desiredKey.nodeName.length = htobe16(desiredKey.nodeName.length);
 
 		desiredKey.parentID = htobe32(parentID);
@@ -221,6 +222,8 @@ int HFSCatalogBTree::stat(std::string path, HFSPlusCatalogFileOrFolder* s, bool 
 	if (!noByteSwap)
 		fixEndian(*s);
 #endif
+	
+	std::cout << "File/folder flags: 0x" << std::hex << s->file.flags << std::endl;
 
 	return 0;
 }
@@ -331,12 +334,12 @@ time_t HFSCatalogBTree::appleToUnixTime(uint32_t apple)
 	return apple - offset;
 }
 
-int HFSCatalogBTree::openFile(const std::string& path, Reader** forkOut, bool resourceFork)
+int HFSCatalogBTree::openFile(const std::string& path, std::shared_ptr<Reader>& forkOut, bool resourceFork)
 {
 	HFSPlusCatalogFileOrFolder ff;
 	int rv;
 
-	*forkOut = nullptr;
+	forkOut.reset();
 
 	rv = stat(path, &ff, true);
 	if (rv < 0)
@@ -345,8 +348,8 @@ int HFSCatalogBTree::openFile(const std::string& path, Reader** forkOut, bool re
 	if (RecordType(be(uint16_t(ff.folder.recordType))) != RecordType::kHFSPlusFileRecord)
 		return -EISDIR;
 
-	*forkOut = new HFSFork(m_volume, resourceFork ? ff.file.resourceFork : ff.file.dataFork,
-		ff.file.fileID, resourceFork);
+	forkOut.reset(new HFSFork(m_volume, resourceFork ? ff.file.resourceFork : ff.file.dataFork,
+		ff.file.fileID, resourceFork));
 
 	return 0;
 }

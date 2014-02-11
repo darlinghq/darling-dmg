@@ -4,10 +4,11 @@
 #include "HFSFork.h"
 #include "HFSCatalogBTree.h"
 #include "HFSExtentsOverflowBTree.h"
+#include "HFSAttributeBTree.h"
 #include "SubReader.h"
 
-HFSVolume::HFSVolume(Reader* reader)
-: m_reader(reader), m_embeddedReader(nullptr), m_overflowExtents(nullptr)
+HFSVolume::HFSVolume(std::shared_ptr<Reader> reader)
+: m_reader(reader), m_embeddedReader(nullptr), m_overflowExtents(nullptr), m_attributes(nullptr)
 {
 	static_assert(sizeof(HFSPlusVolumeHeader) >= sizeof(HFSMasterDirectoryBlock), "Bad read is about to happen");
 	
@@ -25,12 +26,19 @@ HFSVolume::HFSVolume(Reader* reader)
 
 	HFSFork* fork = new HFSFork(this, m_header.extentsFile);
 	m_overflowExtents = new HFSExtentsOverflowBTree(fork);
+	
+	if (m_header.attributesFile.logicalSize != 0)
+	{
+		fork = new HFSFork(this, m_header.attributesFile, kHFSAttributesFileID);
+		m_attributes = new HFSAttributeBTree(fork);
+	}
 }
 
 HFSVolume::~HFSVolume()
 {
+	delete m_attributes;
 	delete m_overflowExtents;
-	delete m_embeddedReader;
+	//delete m_embeddedReader;
 }
 
 void HFSVolume::processEmbeddedHFSPlus(HFSMasterDirectoryBlock* block)
@@ -46,13 +54,13 @@ void HFSVolume::processEmbeddedHFSPlus(HFSMasterDirectoryBlock* block)
 	
 	std::cout << "HFS+ partition is embedded at offset: " << offset << ", length: " << length << std::endl;
 	
-	m_embeddedReader = new SubReader(m_reader, offset, length);
+	m_embeddedReader.reset(new SubReader(m_reader, offset, length));
 	m_reader = m_embeddedReader;
 	
 	m_reader->read(&m_header, sizeof(m_header), 1024);
 }
 
-bool HFSVolume::isHFSPlus(Reader* reader)
+bool HFSVolume::isHFSPlus(std::shared_ptr<Reader> reader)
 {
 	HFSPlusVolumeHeader header;
 	if (reader->read(&header, sizeof(header), 1024) != sizeof(header))

@@ -7,6 +7,7 @@
 #include <ctime>
 #include "hfsplus.h"
 #include "HFSBTreeNode.h"
+#include <memory>
 
 class HFSCatalogBTree : protected HFSBTree
 {
@@ -16,7 +17,7 @@ public:
 
 	int listDirectory(const std::string& path, std::map<std::string, HFSPlusCatalogFileOrFolder>& contents);
 	int stat(std::string path, HFSPlusCatalogFileOrFolder* s, bool noByteSwap = false);
-	int openFile(const std::string& path, Reader** forkOut, bool resourceFork = false);
+	int openFile(const std::string& path, std::shared_ptr<Reader>& forkOut, bool resourceFork = false);
 
 	bool isCaseSensitive() const;
 

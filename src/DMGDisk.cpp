@@ -10,7 +10,7 @@
 #include "AppleDisk.h"
 #include "GPTDisk.h"
 
-DMGDisk::DMGDisk(Reader* reader)
+DMGDisk::DMGDisk(std::shared_ptr<Reader> reader)
 	: m_reader(reader)
 {
 	uint64_t offset = m_reader->length();
@@ -35,7 +35,7 @@ DMGDisk::~DMGDisk()
 	xmlFreeDoc(m_kolyXML);
 }
 
-bool DMGDisk::isDMG(Reader* reader)
+bool DMGDisk::isDMG(std::shared_ptr<Reader> reader)
 {
 	uint64_t offset = reader->length() - 512;
 	decltype(UDIFResourceFile::fUDIFSignature) sig = 0;
@@ -76,7 +76,7 @@ void DMGDisk::loadKoly(const UDIFResourceFile& koly)
 	
 	if (!simpleWayOK)
 	{
-		Reader *rm1 = nullptr, *r1 = nullptr;
+		std::shared_ptr<Reader> rm1, r1;
 		PartitionedDisk* pdisk;
 
 		rm1 = readerForKolyBlock(-1);
@@ -97,8 +97,6 @@ void DMGDisk::loadKoly(const UDIFResourceFile& koly)
 		m_partitions = pdisk->partitions();
 
 		delete pdisk;
-		delete rm1;
-		delete r1;
 	}
 //#endif
 }
@@ -214,7 +212,7 @@ bool DMGDisk::base64Decode(const std::string& input, std::vector<uint8_t>& outpu
 	return rd >= 0;
 }
 
-Reader* DMGDisk::readerForPartition(int index)
+std::shared_ptr<Reader> DMGDisk::readerForPartition(int index)
 {
 	for (int i = -1;; i++)
 	{
@@ -224,7 +222,7 @@ Reader* DMGDisk::readerForPartition(int index)
 			continue;
 		
 		if (be(table->firstSectorNumber)*512 == m_partitions[index].offset)
-			return new DMGPartition(m_reader, table);
+			return std::shared_ptr<Reader>(new DMGPartition(m_reader, table));
 		
 		delete table;
 	}
@@ -232,11 +230,11 @@ Reader* DMGDisk::readerForPartition(int index)
 	return nullptr;
 }
 
-Reader* DMGDisk::readerForKolyBlock(int index)
+std::shared_ptr<Reader> DMGDisk::readerForKolyBlock(int index)
 {
 	BLKXTable* table = loadBLKXTableForPartition(index);
 	if (!table)
 		return nullptr;
-	return new DMGPartition(m_reader, table);
+	return std::shared_ptr<Reader>(new DMGPartition(m_reader, table));
 }
 
