@@ -24,12 +24,12 @@ HFSVolume::HFSVolume(std::shared_ptr<Reader> reader)
 	if (be(m_header.signature) != HFSP_SIGNATURE && be(m_header.signature) != HFSX_SIGNATURE)
 		throw std::runtime_error("Invalid HFS+/HFSX signature");
 
-	HFSFork* fork = new HFSFork(this, m_header.extentsFile);
+	std::shared_ptr<HFSFork> fork (new HFSFork(this, m_header.extentsFile));
 	m_overflowExtents = new HFSExtentsOverflowBTree(fork);
 	
 	if (m_header.attributesFile.logicalSize != 0)
 	{
-		fork = new HFSFork(this, m_header.attributesFile, kHFSAttributesFileID);
+		fork.reset(new HFSFork(this, m_header.attributesFile, kHFSAttributesFileID));
 		m_attributes = new HFSAttributeBTree(fork);
 	}
 }
@@ -88,7 +88,7 @@ void HFSVolume::usage(uint64_t& totalBytes, uint64_t& freeBytes) const
 
 HFSCatalogBTree* HFSVolume::rootCatalogTree()
 {
-	HFSFork* fork = new HFSFork(this, m_header.catalogFile, kHFSCatalogFileID);
+	std::shared_ptr<HFSFork> fork (new HFSFork(this, m_header.catalogFile, kHFSCatalogFileID));
 	HFSCatalogBTree* btree = new HFSCatalogBTree(fork, this);
 	
 	return btree;

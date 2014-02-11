@@ -18,12 +18,14 @@ AppleDisk::AppleDisk(std::shared_ptr<Reader> readerBlock0, std::shared_ptr<Reade
 
 void AppleDisk::load(std::shared_ptr<Reader> readerPM)
 {
-	size_t blockSize = be(m_block0.sbBlkSize);
+	size_t blockSize;
 	
 	m_reader->read(&m_block0, sizeof(m_block0), 0);
 	
 	if (be(m_block0.sbSig) != BLOCK0_SIGNATURE)
 		throw std::runtime_error("Invalid block0 signature");
+	
+	blockSize = be(m_block0.sbBlkSize);
 	
 	if (!blockSize)
 	{

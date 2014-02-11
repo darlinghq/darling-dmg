@@ -3,11 +3,12 @@
 #include "HFSBTree.h"
 #include "hfsplus.h"
 #include <vector>
+#include <memory>
 
 class HFSExtentsOverflowBTree : protected HFSBTree
 {
 public:
-	HFSExtentsOverflowBTree(HFSFork* fork);
+	HFSExtentsOverflowBTree(std::shared_ptr<HFSFork> fork);
 	void findExtentsForFile(HFSCatalogNodeID cnid, bool resourceFork, uint32_t startBlock, std::vector<HFSPlusExtentDescriptor>& extraExtents);
 private:
 	static int cnidComparator(const Key* indexKey, const Key* desiredKey);

@@ -23,7 +23,8 @@ GPTDisk::GPTDisk(std::shared_ptr<Reader> protectiveMBR, std::shared_ptr<Reader> 
 bool GPTDisk::isGPTDisk(std::shared_ptr<Reader> reader)
 {
 	ProtectiveMBR mbr;
-	reader->read(&mbr, sizeof(mbr), 0);
+	if (reader->read(&mbr, sizeof(mbr), 0) != sizeof(mbr))
+		return false;
 	
 	if (mbr.signature != MBR_SIGNATURE)
 		return false;

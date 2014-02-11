@@ -17,6 +17,7 @@
 #include "HFSAttributeBTree.h"
 #include "DMGDecompressor.h"
 #include "ResourceFork.h"
+#include "CachedReader.h"
 #include "decmpfs.h"
 
 static const char* RESOURCE_FORK_SUFFIX = "#..namedfork#rsrc";
@@ -27,6 +28,7 @@ std::shared_ptr<Reader> g_fileReader;
 PartitionedDisk* g_partitions;
 HFSVolume* g_volume;
 HFSCatalogBTree* g_tree;
+CacheZone g_fileZone(6400);
 
 int main(int argc, char** argv)
 {
@@ -89,6 +91,7 @@ int main(int argc, char** argv)
 void openDisk(const char* path)
 {
 	int partIndex = -1;
+	uint64_t volumeSize;
 
 	g_fileReader.reset(new FileReader(path));
 
@@ -123,6 +126,14 @@ void openDisk(const char* path)
 			throw std::runtime_error("No suitable partition found in file");
 
 		g_volume = new HFSVolume(g_partitions->readerForPartition(partIndex));
+	}
+	
+	volumeSize = g_volume->volumeSize();
+	if (volumeSize < 50*1024*1024)
+	{
+		// limit cache sizes to volume size
+		g_fileZone.setMaxBlocks(volumeSize / CacheZone::BLOCK_SIZE / 2);
+		HFSBTree::setMaxCacheBlocks(volumeSize / CacheZone::BLOCK_SIZE / 2);
 	}
 	
 	g_tree = g_volume->rootCatalogTree();
@@ -330,7 +341,7 @@ int hfs_open(const char* path, struct fuse_file_info* info)
 						break;
 					case DecmpfsCompressionType::CompressedInline:
 						file.reset(new MemoryReader(hdr->attr_bytes, holder.size() - 16));
-						file.reset(new HFSZlibReader(file, hdr->uncompressed_size));
+						file.reset(new HFSZlibReader(file, hdr->uncompressed_size, true));
 						rv = 0;
 						break;
 					case DecmpfsCompressionType::CompressedResourceFork:
@@ -355,7 +366,10 @@ int hfs_open(const char* path, struct fuse_file_info* info)
 		}
 
 		if (rv == 0)
-			info->fh = uint64_t(new std::shared_ptr<Reader>(file)); // ugly...
+		{
+			std::shared_ptr<Reader>* fh = new std::shared_ptr<Reader>(new CachedReader(file, &g_fileZone, path));
+			info->fh = uint64_t(fh);
+		}
 		
 		return rv;
 	}

@@ -22,6 +22,7 @@ public:
 
 	bool isHFSX() const;
 	inline HFSAttributeBTree* attributes() { return m_attributes; }
+	inline uint64_t volumeSize() const { return m_reader->length(); }
 	
 	static bool isHFSPlus(std::shared_ptr<Reader> reader);
 private:

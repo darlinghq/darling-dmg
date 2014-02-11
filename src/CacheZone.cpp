@@ -7,13 +7,23 @@ CacheZone::CacheZone(size_t maxBlocks)
 {
 }
 
+void CacheZone::setMaxBlocks(size_t max)
+{
+	m_maxBlocks = max;
+	evictCache();
+}
+
 void CacheZone::store(const std::string& vfile, uint64_t blockId, const uint8_t* data, size_t bytes)
 {
 	CacheKey key = CacheKey(blockId, vfile);
-	CacheEntry entry = CacheEntry(data, data+bytes);
+	CacheEntry entry;
+	std::unordered_map<CacheKey, CacheEntry>::iterator it;
 	
-	m_cache.insert({ key, entry });
-	m_cacheAge.insert({ std::chrono::system_clock::now(), key });
+	entry.data = std::vector<uint8_t>(data, data+bytes);
+	
+	it = m_cache.insert(m_cache.begin(), { key, entry });
+	m_cacheAge.push_back(key);
+	it->second.itAge = --m_cacheAge.end();
 	
 	if (m_cache.size() > m_maxBlocks)
 		evictCache();
@@ -29,9 +39,12 @@ size_t CacheZone::get(const std::string& vfile, uint64_t blockId, uint8_t* data,
 	if (it == m_cache.end())
 		return 0;
 	
-	maxBytes = std::min(it->second.size() - offset, maxBytes);
-	memcpy(data, &it->second[offset], maxBytes);
+	maxBytes = std::min(it->second.data.size() - offset, maxBytes);
+	memcpy(data, &it->second.data[offset], maxBytes);
 	
+	m_cacheAge.erase(it->second.itAge);
+	m_cacheAge.push_back(key);
+	it->second.itAge = --m_cacheAge.end();
 	m_hits++;
 	
 	return maxBytes;
@@ -41,7 +54,7 @@ void CacheZone::evictCache()
 {
 	while (m_cache.size() > m_maxBlocks)
 	{
-		CacheKey key = m_cacheAge.begin()->second;
+		CacheKey& key = m_cacheAge.front();
 		m_cache.erase(key);
 		m_cacheAge.erase(m_cacheAge.begin());
 	}

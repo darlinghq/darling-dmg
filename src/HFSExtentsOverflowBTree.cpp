@@ -2,8 +2,8 @@
 #include "be.h"
 #include <stdexcept>
 
-HFSExtentsOverflowBTree::HFSExtentsOverflowBTree(HFSFork* fork)
-	: HFSBTree(fork)
+HFSExtentsOverflowBTree::HFSExtentsOverflowBTree(std::shared_ptr<HFSFork> fork)
+	: HFSBTree(fork, "ExtentsOverflow")
 {
 }
 
@@ -28,7 +28,7 @@ void HFSExtentsOverflowBTree::findExtentsForFile(HFSCatalogNodeID cnid, bool res
 			if (recordKey->forkType != key.forkType || be(recordKey->fileID) != cnid)
 				continue;
 			
-			std::cout << "Examining extra extents from startBlock " << be(recordKey->startBlock) << std::endl;
+			//std::cout << "Examining extra extents from startBlock " << be(recordKey->startBlock) << std::endl;
 			if (be(recordKey->startBlock) < startBlock) // skip descriptors already contained in the extents file
 				continue;
 
@@ -46,7 +46,7 @@ void HFSExtentsOverflowBTree::findExtentsForFile(HFSCatalogNodeID cnid, bool res
 			{
 				if (!extents[x].blockCount)
 				{
-					std::cout << "Extent #" << x << " has zero blockCount\n";
+					//std::cout << "Extent #" << x << " has zero blockCount\n";
 					break;
 				}
 

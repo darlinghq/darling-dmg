@@ -5,13 +5,14 @@
 #include "hfsplus.h"
 #include <cstddef>
 #include <vector>
+#include <memory>
 #include "HFSBTreeNode.h"
+#include "CachedReader.h"
 
 class HFSBTree
 {
 public:
-	HFSBTree(HFSFork* fork);
-	virtual ~HFSBTree();
+	HFSBTree(std::shared_ptr<HFSFork> fork, const char* cacheTag);
 
 	struct Key
 	{
@@ -33,13 +34,17 @@ public:
 	// Return value includes the leaf node where the comparator returns true for the first time when approaching from the right,
 	// and all following nodes for which the comparator returns true as well.
 	std::vector<HFSBTreeNode> findLeafNodes(const Key* indexKey, KeyComparator comp);
+	
+	// Set maximum cache size in blocks for all btrees
+	static void setMaxCacheBlocks(size_t numBlocks);
 
 protected:
 	HFSBTreeNode traverseTree(int nodeIndex, const Key* indexKey, KeyComparator comp, bool wildcard);
 	void walkTree(int nodeIndex);
 protected:
-	HFSFork* m_fork;
-	char* m_tree;
+	std::shared_ptr<HFSFork> m_fork;
+	std::shared_ptr<Reader> m_reader;
+	//char* m_tree;
 	BTHeaderRec m_header;
 };
 

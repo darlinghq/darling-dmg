@@ -4,13 +4,13 @@
 #include <map>
 #include <vector>
 #include <string>
+#include <memory>
 #include <stdint.h>
 
 class HFSAttributeBTree : protected HFSBTree
 {
 public:
-	// using HFSBTree::HFSBTree;
-	HFSAttributeBTree(HFSFork* fork);
+	HFSAttributeBTree(std::shared_ptr<HFSFork> fork);
 	
 	typedef std::map<std::string, std::vector<uint8_t>> AttributeMap;
 	

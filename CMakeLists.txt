@@ -41,6 +41,7 @@ add_executable(darling-dmg
 	src/MacBinary.cpp
 	src/ResourceFork.cpp
 	src/CacheZone.cpp
+	src/CachedReader.cpp
 )
 
 target_link_libraries(darling-dmg -licuuc -lcrypto -lz -lbz2 -lfuse ${LIBXML2_LIBRARY})

@@ -3,6 +3,10 @@
 #include "hfsplus.h"
 #include "be.h"
 #include <iostream>
+#include <vector>
+#include <memory>
+#include <stdexcept>
+#include "Reader.h"
 
 class HFSBTreeNode
 {
@@ -12,18 +16,34 @@ public:
 	{
 	}
 	
-	HFSBTreeNode(BTNodeDescriptor* descriptor, uint16_t nodeSize)
-	: m_descriptor(descriptor), m_nodeSize(nodeSize)
+	HFSBTreeNode(const std::vector<uint8_t>& descriptorData, uint16_t nodeSize)
+	: m_descriptorData(descriptorData), m_nodeSize(nodeSize)
 	{
-		m_firstRecordOffset = reinterpret_cast<uint16_t*>(descPtr() + m_nodeSize - sizeof(uint16_t));
+		initFromBuffer();
 	}
 	
-	HFSBTreeNode(void* tree, uint32_t nodeIndex, uint16_t nodeSize)
+	HFSBTreeNode(std::shared_ptr<Reader> treeReader, uint32_t nodeIndex, uint16_t nodeSize)
 	: m_nodeSize(nodeSize)
 	{
-		m_descriptor = reinterpret_cast<BTNodeDescriptor*>(((char*)tree) + nodeSize*nodeIndex);
-		//std::cout << "Node descriptor for node " << nodeIndex << " is at " << nodeDescriptor << ", size " << nodeSize << std::endl;
-		m_firstRecordOffset = reinterpret_cast<uint16_t*>(descPtr() + m_nodeSize - sizeof(uint16_t));
+		m_descriptorData.resize(nodeSize);
+		
+		if (treeReader->read(&m_descriptorData[0], nodeSize, nodeSize*nodeIndex) < nodeSize)
+			throw std::runtime_error("Short read of BTree node");
+		
+		initFromBuffer();
+	}
+	
+	HFSBTreeNode(const HFSBTreeNode& that)
+	{
+		*this = that;
+	}
+	
+	HFSBTreeNode& operator=(const HFSBTreeNode& that)
+	{
+		m_descriptorData = that.m_descriptorData;
+		m_nodeSize = that.m_nodeSize;
+		initFromBuffer();
+		return *this;
 	}
 	
 	NodeKind kind() const
@@ -143,8 +163,14 @@ private:
 	{
 		return reinterpret_cast<char*>(m_descriptor);
 	}
+	void initFromBuffer()
+	{
+		m_descriptor = reinterpret_cast<BTNodeDescriptor*>(&m_descriptorData[0]);
+		m_firstRecordOffset = reinterpret_cast<uint16_t*>(descPtr() + m_nodeSize - sizeof(uint16_t));
+	}
 private:
 	mutable BTNodeDescriptor* m_descriptor;
+	std::vector<uint8_t> m_descriptorData;
 	uint16_t m_nodeSize;
 	uint16_t* m_firstRecordOffset;
 };

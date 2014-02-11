@@ -51,8 +51,8 @@ int32_t DMGPartition::read(void* buf, int32_t count, uint64_t offset)
 		
 		itRun--; // move to the sector we want to read
 
-		std::cout << "Reading from offset " << offset << " " << count << " bytes\n";
-		std::cout << "Run sector " << itRun->first << " run index=" << itRun->second << std::endl;
+		//std::cout << "Reading from offset " << offset << " " << count << " bytes\n";
+		//std::cout << "Run sector " << itRun->first << " run index=" << itRun->second << std::endl;
 		
 		if (!done)
 			offsetInSector = offset - itRun->first*SECTOR_SIZE;
@@ -79,14 +79,14 @@ int32_t DMGPartition::readRun(void* buf, int32_t runIndex, uint64_t offsetInSect
 	switch (runType)
 	{
 		case RunType::ZeroFill:
-			std::cout << "ZeroFill\n";
+			//std::cout << "ZeroFill\n";
 			memset(buf, 0, count);
 			return count;
 		case RunType::Raw:
-			std::cout << "Raw\n";
+			//std::cout << "Raw\n";
 			return m_disk->read(buf, count, be(run->compOffset) + be(m_table->dataStart) + offsetInSector);
 		case RunType::Unknown:
-			std::cout << "Unknown\n";
+			//std::cout << "Unknown\n";
 			return m_disk->read(buf, count, be(run->compOffset) + be(m_table->dataStart) + offsetInSector);
 		case RunType::Zlib:
 		case RunType::Bzip2:
@@ -113,7 +113,7 @@ int32_t DMGPartition::readRun(void* buf, int32_t runIndex, uint64_t offsetInSect
 				}
 				else
 					dec = decompressor->decompress(((char*)buf)+done, count-done);
-				std::cout << "Decompressor returned " << dec << std::endl;
+				//std::cout << "Decompressor returned " << dec << std::endl;
 				
 				if (dec < 0)
 					throw std::runtime_error("Error decompressing stream");

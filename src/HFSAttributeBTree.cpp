@@ -4,8 +4,8 @@
 #include <unicode/unistr.h>
 #include "unichar.h"
 
-HFSAttributeBTree::HFSAttributeBTree(HFSFork* fork)
-: HFSBTree(fork)
+HFSAttributeBTree::HFSAttributeBTree(std::shared_ptr<HFSFork> fork)
+: HFSBTree(fork, "Attribute")
 {
 }
 
@@ -92,7 +92,7 @@ int HFSAttributeBTree::cnidAttrComparator(const Key* indexKey, const Key* desire
 	const HFSPlusAttributeKey* indexAttributeKey = reinterpret_cast<const HFSPlusAttributeKey*>(indexKey);
 	const HFSPlusAttributeKey* desiredAttributeKey = reinterpret_cast<const HFSPlusAttributeKey*>(desiredKey);
 	
-	std::cout << "Attr search: index cnid: " << be(indexAttributeKey->fileID) << " desired cnid: " << be(desiredAttributeKey->fileID) << std::endl;
+	//std::cout << "Attr search: index cnid: " << be(indexAttributeKey->fileID) << " desired cnid: " << be(desiredAttributeKey->fileID) << std::endl;
 
 	if (be(indexAttributeKey->fileID) > be(desiredAttributeKey->fileID))
 		return 1;

@@ -9,8 +9,8 @@
 class HFSZlibReader : public Reader
 {
 public:
-	HFSZlibReader(std::shared_ptr<Reader> parent, uint64_t uncompressedSize);
-    virtual ~HFSZlibReader();
+	HFSZlibReader(std::shared_ptr<Reader> parent, uint64_t uncompressedSize, bool singleRun = false);
+	virtual ~HFSZlibReader();
 	
 	virtual int32_t read(void* buf, int32_t count, uint64_t offset) override;
 	virtual uint64_t length() override;
@@ -25,6 +25,7 @@ private:
 	z_stream m_strm;
 	int m_lastRun = -1;
 	uint64_t m_lastEnd = 0, m_inputPos = 0;
+	bool m_lastUncompressed = false;
 	std::vector<uint32_t> m_offsets;
 };
 
