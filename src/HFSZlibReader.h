@@ -26,7 +26,7 @@ private:
 	int m_lastRun = -1;
 	uint64_t m_lastEnd = 0, m_inputPos = 0;
 	bool m_lastUncompressed = false;
-	std::vector<uint32_t> m_offsets;
+	std::vector<std::pair<uint32_t,uint32_t>> m_offsets;
 };
 
 #endif

@@ -10,30 +10,30 @@ HFSZlibReader::HFSZlibReader(std::shared_ptr<Reader> parent, uint64_t uncompress
 {
 	// read the compression table (little endian)
 	// uint32_t numEntries
-	// uint64_t offsets[num_entries+1]
+	// uint32_t offsets[(num_entries+1)*2] (offset, length)
 	//
-	// Each offset points to the start of a 64 KB block (when uncompressed)
+	// Each offset points to the start of a 64 KB block
 	
 	if (!singleRun)
 	{
 		uint32_t numEntries;
+		std::unique_ptr<uint32_t[]> entries;
 		
 		if (m_reader->read(&numEntries, sizeof(numEntries), 0) != sizeof(numEntries))
 			throw std::runtime_error("Short read of compression map");
 		
 		numEntries = le(numEntries);
-		m_offsets.resize(numEntries+1);
+		entries.reset(new uint32_t[(numEntries+1) * 2]);
 		
-		if (m_reader->read(&m_offsets[0], sizeof(uint64_t) * (numEntries+1), sizeof(numEntries)) != sizeof(uint64_t) * (numEntries+1))
+		if (m_reader->read(entries.get(), sizeof(uint32_t) * 2 * (numEntries+1), sizeof(numEntries)) != sizeof(uint32_t) * 2 * (numEntries+1))
 			throw std::runtime_error("Short read of compression map entries");
 		
-		for (size_t i = 0; i < m_offsets.size(); i++)
-			m_offsets[i] = le(m_offsets[i]);
+		for (size_t i = 0; i < numEntries+1; i++)
+			m_offsets.push_back(std::make_pair(le(entries[i*2]), le(entries[i*2+1])));
 	}
 	else
 	{
-		m_offsets.push_back(0);
-		m_offsets.push_back(m_reader->length());
+		m_offsets.push_back(std::pair<uint32_t,uint32_t>(0, m_reader->length()));
 	}
 	
 	zlibInit();
@@ -94,7 +94,7 @@ int32_t HFSZlibReader::readRun(int runIndex, void* buf, int32_t count, uint64_t 
 		thistime = count - done;
 		
 		if (!m_lastUncompressed)
-			read = m_reader->read(inputBuffer, sizeof(inputBuffer), m_inputPos + m_offsets[runIndex]);
+			read = m_reader->read(inputBuffer, sizeof(inputBuffer), m_inputPos + m_offsets[runIndex].first);
 		
 		// Special handling for uncompressed blocks
 		if (m_lastUncompressed || (done == 0 && read > 0 && (inputBuffer[0] & 0xf) == 0xf))
@@ -102,8 +102,8 @@ int32_t HFSZlibReader::readRun(int runIndex, void* buf, int32_t count, uint64_t 
 			if (!m_lastUncompressed)
 				m_inputPos++;
 			
-			count = std::min<int32_t>(count, m_offsets[runIndex+1] - m_offsets[runIndex] - offset - 1);
-			read = m_reader->read(buf, count, m_inputPos + m_offsets[runIndex]);
+			count = std::min<int32_t>(count, m_offsets[runIndex].second - offset - 1);
+			read = m_reader->read(buf, count, m_inputPos + m_offsets[runIndex].first);
 			m_inputPos += read;
 			
 			m_lastEnd += read;

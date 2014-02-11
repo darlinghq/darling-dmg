@@ -30,6 +30,7 @@ public:
 	inline size_t maxBlocks() const { return m_maxBlocks; }
 	
 	inline float hitRate() const { return float(m_hits) / float(m_queries); }
+	inline size_t size() const { return m_cache.size(); }
 private:
 	void evictCache();
 private:

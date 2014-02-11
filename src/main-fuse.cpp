@@ -32,12 +32,12 @@ CacheZone g_fileZone(6400);
 
 int main(int argc, char** argv)
 {
-	char** args = nullptr;
 	int argi, rv;
 	
 	try
 	{
 		struct fuse_operations ops;
+		struct fuse_args args = FUSE_ARGS_INIT(0, NULL);
 	
 		if (argc < 3)
 		{
@@ -60,19 +60,19 @@ int main(int argc, char** argv)
 		ops.getxattr = hfs_getxattr;
 		ops.listxattr = hfs_listxattr;
 	
-		args = new char*[argc+1];
-		args[0] = argv[0];
-		args[1] = argv[2];
-		args[2] = (char*) "-oro";
-	
-		for (argi = 3; argi < argc; argi++)
-			args[argi] = argv[argi];
-	
-		args[argi] = nullptr;
+		for (int i = 0; i < argc; i++)
+		{
+			if (i == 1)
+				;
+			else
+				fuse_opt_add_arg(&args, argv[i]);
+		}
+		fuse_opt_add_arg(&args, "-oro");
+		fuse_opt_add_arg(&args, "-s");
 	
 		std::cout << "Everything looks OK, disk mounted\n";
 
-		rv = fuse_main(argc, args, &ops, 0);
+		rv = fuse_main(args.argc, args.argv, &ops, 0);
 	}
 	catch (const std::exception& e)
 	{
@@ -83,7 +83,6 @@ int main(int argc, char** argv)
 	delete g_tree;
 	delete g_volume;
 	delete g_partitions;
-	delete [] args;
 	
 	return rv;
 }
@@ -396,6 +395,7 @@ int hfs_read(const char* path, char* buf, size_t bytes, off_t offset, struct fus
 
 int hfs_release(const char* path, struct fuse_file_info* info)
 {
+	std::cout << "File cache zone: hit rate: " << g_fileZone.hitRate() << ", size: " << g_fileZone.size() << " blocks\n";
 	try
 	{
 		std::shared_ptr<Reader>* file = (std::shared_ptr<Reader>*) info->fh;
