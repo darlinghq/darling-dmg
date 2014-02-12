@@ -8,13 +8,15 @@
 #include <list>
 #include <unordered_map>
 
-template <typename A, typename B> struct std::hash<std::pair<A, B>>
+namespace std {
+template <typename A, typename B> struct hash<std::pair<A, B>>
 {
 	size_t operator()(const std::pair<A, B>& t) const
 	{
 		return std::hash<A>()(t.first) ^ std::hash<B>()(t.second);
 	}
 };
+}
 
 class CacheZone
 {
