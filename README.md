@@ -16,3 +16,7 @@ Read only access only.
 
     darling-dmg <file-to-mount> <where-to-mount> [FUSE arguments]
 
+### Accessing resource forks
+
+Resource forks are available via xattrs (extended attributes) or prefferably under the name ````/original/filename#..namedfork#rsrc````.
+
