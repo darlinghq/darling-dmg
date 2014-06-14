@@ -78,15 +78,13 @@ int32_t DMGPartition::readRun(void* buf, int32_t runIndex, uint64_t offsetInSect
 	
 	switch (runType)
 	{
+                case RunType::Unknown:
 		case RunType::ZeroFill:
 			//std::cout << "ZeroFill\n";
 			memset(buf, 0, count);
 			return count;
 		case RunType::Raw:
 			//std::cout << "Raw\n";
-			return m_disk->read(buf, count, be(run->compOffset) + be(m_table->dataStart) + offsetInSector);
-		case RunType::Unknown:
-			//std::cout << "Unknown\n";
 			return m_disk->read(buf, count, be(run->compOffset) + be(m_table->dataStart) + offsetInSector);
 		case RunType::Zlib:
 		case RunType::Bzip2:
