@@ -72,7 +72,7 @@ int32_t DMGPartition::readRun(void* buf, int32_t runIndex, uint64_t offsetInSect
 	BLKXRun* run = &m_table->runs[runIndex];
 	RunType runType = RunType(be(run->type));
 	
-	count = std::min<int32_t>(count, be(run->sectorCount)*512 - offsetInSector);
+	count = std::min<int32_t>(count, uint64_t(be(run->sectorCount))*512 - offsetInSector);
 	
 	std::cout << "readRun(): runIndex = " << runIndex << ", offsetInSector = " << offsetInSector << ", count = " << count << std::endl;
 	
