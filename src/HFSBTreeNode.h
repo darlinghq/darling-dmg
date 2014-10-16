@@ -101,9 +101,25 @@ public:
 	public:
 		typedef typename std::iterator<std::random_access_iterator_tag, KeyType>::difference_type difference_type;
 
+		RecordIterator() : m_node(nullptr), m_index(0)
+		{
+		}
+		
+		RecordIterator(const RecordIterator& that) : m_node(that.m_node), m_index(that.m_index)
+		{
+		}
+		
 		RecordIterator(const HFSBTreeNode* node, int index) : m_node(node), m_index(index)
 		{
 		}
+		
+		RecordIterator& operator=(const RecordIterator& that)
+		{
+			m_node = that.m_node;
+			m_index = that.m_index;
+			return *this;
+		}
+		
 		KeyType* operator*()
 		{
 			return m_node->getRecordKey<KeyType>(m_index);
