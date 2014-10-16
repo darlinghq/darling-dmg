@@ -10,8 +10,6 @@
 #include "HFSBTreeNode.h"
 #include "CacheZone.h"
 
-CacheZone g_btreeZone(6400);
-
 HFSBTree::HFSBTree(std::shared_ptr<HFSFork> fork, CacheZone* zone, const char* cacheTag)
 : m_fork(fork)
 {
@@ -19,7 +17,7 @@ HFSBTree::HFSBTree(std::shared_ptr<HFSFork> fork, CacheZone* zone, const char* c
 	
 	//std::cout << "Tree size: " << fork->length() << std::endl;
 	
-	m_reader.reset(new CachedReader(m_fork, &g_btreeZone, cacheTag));
+	m_reader.reset(new CachedReader(m_fork, zone, cacheTag));
 	
 	if (m_reader->read(&desc0, sizeof(desc0), 0) != sizeof(desc0))
 		throw std::runtime_error("Failed to read BTNodeDescriptor zero");
