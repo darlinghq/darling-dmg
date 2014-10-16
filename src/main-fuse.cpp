@@ -71,6 +71,7 @@ int main(int argc, char** argv)
 		fuse_opt_add_arg(&args, "-s");
 	
 		std::cout << "Everything looks OK, disk mounted\n";
+		// g_tree->dumpTree();
 
 		rv = fuse_main(args.argc, args.argv, &ops, 0);
 	}

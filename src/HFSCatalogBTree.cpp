@@ -41,24 +41,23 @@ int HFSCatalogBTree::caseInsensitiveComparator(const Key* indexKey, const Key* d
 
 	desiredName = UnicodeString((char*)catDesiredKey->nodeName.string, be(catDesiredKey->nodeName.length)*2, g_utf16be, error);
 	indexName = UnicodeString((char*)catIndexKey->nodeName.string, be(catIndexKey->nodeName.length)*2, g_utf16be, error);
-
-	//if (indexName.length() > 0 || be(catIndexKey->parentID) != kHFSRootParentID)
+	
+	// Hack for "\0\0\0\0HFS+ Private Data" which should come as last in ordering (issue #11)
+	if (indexName.charAt(0) == 0)
+		return 1;
+	else if (desiredName.charAt(0) == 0)
+		return -1;
+	
 	{
-		std::string des, idx;
-		desiredName.toUTF8String(des);
-		indexName.toUTF8String(idx);
+		//std::string des, idx;
+		//desiredName.toUTF8String(des);
+		//indexName.toUTF8String(idx);
 		
 		int r = indexName.caseCompare(desiredName, 0);
 		
 		//std::cout << "desired: " << des << " - index: " << idx << " -> r=" << r << std::endl;
 
 		return r;
-		
-		/*
-		if (r < 0)
-			return CompareResult::Greater;
-		else if (r > 0)
-			return CompareResult::Smaller;*/
 	}
 	
 	return 0;
@@ -78,9 +77,25 @@ int HFSCatalogBTree::caseSensitiveComparator(const Key* indexKey, const Key* des
 
 	desiredName = UnicodeString((char*)catDesiredKey->nodeName.string, be(catDesiredKey->nodeName.length)*2, g_utf16be, error);
 	indexName = UnicodeString((char*)catIndexKey->nodeName.string, be(catIndexKey->nodeName.length)*2, g_utf16be, error);
+	
+	// Hack for "\0\0\0\0HFS+ Private Data" which should come as last in ordering (issue #11)
+	if (indexName.charAt(0) == 0)
+		return 1;
+	else if (desiredName.charAt(0) == 0)
+		return 1;
 
 	if (desiredName.length() > 0)
-		return indexName.compare(desiredName);
+	{
+		//std::string des, idx;
+		//desiredName.toUTF8String(des);
+		//indexName.toUTF8String(idx);
+		
+		int r = indexName.caseCompare(desiredName, 0);
+		
+		// std::cout << "desired: " << des << " - index: " << idx << " -> r=" << r << std::endl;
+
+		return r;
+	}
 
 	return 0;
 }
@@ -116,7 +131,7 @@ int HFSCatalogBTree::listDirectory(const std::string& path, std::map<std::string
 	if (rv != 0)
 		return rv;
 
-    if (dir.folder.recordType != RecordType::kHFSPlusFolderRecord)
+	if (dir.folder.recordType != RecordType::kHFSPlusFolderRecord)
 		return -ENOTDIR;
 
 	// find leaves that may contain directory elements
@@ -358,3 +373,60 @@ int HFSCatalogBTree::openFile(const std::string& path, std::shared_ptr<Reader>& 
 	return 0;
 }
 
+void HFSCatalogBTree::dumpTree() const
+{
+	dumpTree(be(m_header.rootNode), 0);
+}
+
+void HFSCatalogBTree::dumpTree(int nodeIndex, int depth) const
+{
+	HFSBTreeNode node(m_reader, nodeIndex, be(m_header.nodeSize));
+	
+	switch (node.kind())
+	{
+		case NodeKind::kBTIndexNode:
+		{
+			for (size_t i = 0; i < node.recordCount(); i++)
+			{
+				UErrorCode error = U_ZERO_ERROR;
+				HFSPlusCatalogKey* key = node.getRecordKey<HFSPlusCatalogKey>(i);
+				UnicodeString keyName((char*)key->nodeName.string, be(key->nodeName.length)*2, g_utf16be, error);
+				std::string str;
+				
+				keyName.toUTF8String(str);
+				
+				std::cout << "dumpTree(i): " << std::string(depth, ' ') << str << "(" << be(key->parentID) << ")\n";
+				
+				// recurse down
+				uint32_t* childIndex = node.getRecordData<uint32_t>(i);
+				dumpTree(be(*childIndex), depth+1);
+			}
+			
+			break;
+		}
+		case NodeKind::kBTLeafNode:
+		{
+			for (int i = 0; i < node.recordCount(); i++)
+			{
+				HFSPlusCatalogKey* recordKey;
+				UErrorCode error = U_ZERO_ERROR;
+				UnicodeString keyName;
+				std::string str;
+				
+				recordKey = node.getRecordKey<HFSPlusCatalogKey>(i);
+				keyName = UnicodeString((char*)recordKey->nodeName.string, be(recordKey->nodeName.length)*2, g_utf16be, error);
+				keyName.toUTF8String(str);
+				
+				std::cout << "dumpTree(l): " << std::string(depth, ' ') << str << "(" << be(recordKey->parentID) << ")\n";
+			}
+			
+			break;
+		}
+		case NodeKind::kBTHeaderNode:
+		case NodeKind::kBTMapNode:
+			break;
+		default:
+			std::cerr << "Invalid node kind! Kind: " << int(node.kind()) << std::endl;
+			
+	}
+}

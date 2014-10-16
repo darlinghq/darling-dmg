@@ -20,6 +20,9 @@ public:
 	int openFile(const std::string& path, std::shared_ptr<Reader>& forkOut, bool resourceFork = false);
 
 	bool isCaseSensitive() const;
+	
+	// Debug only
+	void dumpTree() const;
 
 	static time_t appleToUnixTime(uint32_t apple);
 protected:
@@ -33,6 +36,8 @@ private:
 	static int caseSensitiveComparator(const Key* indexKey, const Key* desiredKey);
 	static int idOnlyComparator(const Key* indexKey, const Key* desiredKey);
 	static void fixEndian(HFSPlusCatalogFileOrFolder& ff);
+	
+	void dumpTree(int nodeIndex, int depth) const;
 private:
 	HFSVolume* m_volume;
 };
