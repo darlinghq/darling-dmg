@@ -28,7 +28,6 @@ std::shared_ptr<Reader> g_fileReader;
 PartitionedDisk* g_partitions;
 HFSVolume* g_volume;
 HFSCatalogBTree* g_tree;
-CacheZone g_fileZone(6400);
 
 int main(int argc, char** argv)
 {
@@ -132,8 +131,8 @@ void openDisk(const char* path)
 	if (volumeSize < 50*1024*1024)
 	{
 		// limit cache sizes to volume size
-		g_fileZone.setMaxBlocks(volumeSize / CacheZone::BLOCK_SIZE / 2);
-		HFSBTree::setMaxCacheBlocks(volumeSize / CacheZone::BLOCK_SIZE / 2);
+		g_volume->getFileZone()->setMaxBlocks(volumeSize / CacheZone::BLOCK_SIZE / 2);
+		g_volume->getBtreeZone()->setMaxBlocks(volumeSize / CacheZone::BLOCK_SIZE / 2);
 	}
 	
 	g_tree = g_volume->rootCatalogTree();
@@ -367,7 +366,7 @@ int hfs_open(const char* path, struct fuse_file_info* info)
 
 		if (rv == 0)
 		{
-			std::shared_ptr<Reader>* fh = new std::shared_ptr<Reader>(new CachedReader(file, &g_fileZone, path));
+			std::shared_ptr<Reader>* fh = new std::shared_ptr<Reader>(new CachedReader(file, g_volume->getFileZone(), path));
 			info->fh = uint64_t(fh);
 		}
 		
@@ -396,7 +395,7 @@ int hfs_read(const char* path, char* buf, size_t bytes, off_t offset, struct fus
 
 int hfs_release(const char* path, struct fuse_file_info* info)
 {
-	std::cout << "File cache zone: hit rate: " << g_fileZone.hitRate() << ", size: " << g_fileZone.size() << " blocks\n";
+	std::cout << "File cache zone: hit rate: " << g_volume->getFileZone()->hitRate() << ", size: " << g_volume->getFileZone()->size() << " blocks\n";
 	try
 	{
 		std::shared_ptr<Reader>* file = (std::shared_ptr<Reader>*) info->fh;

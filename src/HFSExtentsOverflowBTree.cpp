@@ -2,8 +2,8 @@
 #include "be.h"
 #include <stdexcept>
 
-HFSExtentsOverflowBTree::HFSExtentsOverflowBTree(std::shared_ptr<HFSFork> fork)
-	: HFSBTree(fork, "ExtentsOverflow")
+HFSExtentsOverflowBTree::HFSExtentsOverflowBTree(std::shared_ptr<HFSFork> fork, CacheZone* zone)
+	: HFSBTree(fork, zone, "ExtentsOverflow")
 {
 }
 

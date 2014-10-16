@@ -4,8 +4,8 @@
 #include <unicode/unistr.h>
 #include "unichar.h"
 
-HFSAttributeBTree::HFSAttributeBTree(std::shared_ptr<HFSFork> fork)
-: HFSBTree(fork, "Attribute")
+HFSAttributeBTree::HFSAttributeBTree(std::shared_ptr<HFSFork> fork, CacheZone* zone)
+: HFSBTree(fork, zone, "Attribute")
 {
 }
 

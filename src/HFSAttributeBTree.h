@@ -1,6 +1,7 @@
 #ifndef HFSATTRIBUTEBTREE_H
 #define HFSATTRIBUTEBTREE_H
 #include "HFSBTree.h"
+#include "CacheZone.h"
 #include <map>
 #include <vector>
 #include <string>
@@ -10,7 +11,7 @@
 class HFSAttributeBTree : protected HFSBTree
 {
 public:
-	HFSAttributeBTree(std::shared_ptr<HFSFork> fork);
+	HFSAttributeBTree(std::shared_ptr<HFSFork> fork, CacheZone* zone);
 	
 	typedef std::map<std::string, std::vector<uint8_t>> AttributeMap;
 	

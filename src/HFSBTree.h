@@ -8,11 +8,12 @@
 #include <memory>
 #include "HFSBTreeNode.h"
 #include "CachedReader.h"
+#include "CacheZone.h"
 
 class HFSBTree
 {
 public:
-	HFSBTree(std::shared_ptr<HFSFork> fork, const char* cacheTag);
+	HFSBTree(std::shared_ptr<HFSFork> fork, CacheZone* zone, const char* cacheTag);
 
 	struct Key
 	{
@@ -34,9 +35,6 @@ public:
 	// Return value includes the leaf node where the comparator returns true for the first time when approaching from the right,
 	// and all following nodes for which the comparator returns true as well.
 	std::vector<HFSBTreeNode> findLeafNodes(const Key* indexKey, KeyComparator comp);
-	
-	// Set maximum cache size in blocks for all btrees
-	static void setMaxCacheBlocks(size_t numBlocks);
 
 protected:
 	HFSBTreeNode traverseTree(int nodeIndex, const Key* indexKey, KeyComparator comp, bool wildcard);

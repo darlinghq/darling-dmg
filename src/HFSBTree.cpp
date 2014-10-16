@@ -12,7 +12,7 @@
 
 CacheZone g_btreeZone(6400);
 
-HFSBTree::HFSBTree(std::shared_ptr<HFSFork> fork, const char* cacheTag)
+HFSBTree::HFSBTree(std::shared_ptr<HFSFork> fork, CacheZone* zone, const char* cacheTag)
 : m_fork(fork)
 {
 	BTNodeDescriptor desc0;
@@ -39,11 +39,6 @@ HFSBTree::HFSBTree(std::shared_ptr<HFSFork> fork, const char* cacheTag)
 	{
 		walkTree(be(m_header.rootNode));
 	}*/
-}
-
-void HFSBTree::setMaxCacheBlocks(size_t numBlocks)
-{
-	g_btreeZone.setMaxBlocks(numBlocks);
 }
 
 HFSBTreeNode HFSBTree::findLeafNode(const Key* indexKey, KeyComparator comp, bool wildcard)

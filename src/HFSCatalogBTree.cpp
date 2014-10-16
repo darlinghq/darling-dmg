@@ -10,8 +10,8 @@ static const int MAX_SYMLINKS = 50;
 
 extern UConverter *g_utf16be;
 
-HFSCatalogBTree::HFSCatalogBTree(std::shared_ptr<HFSFork> fork, HFSVolume* volume)
-	: HFSBTree(fork, "Catalog"), m_volume(volume)
+HFSCatalogBTree::HFSCatalogBTree(std::shared_ptr<HFSFork> fork, HFSVolume* volume, CacheZone* zone)
+	: HFSBTree(fork, zone, "Catalog"), m_volume(volume)
 {
 }
 

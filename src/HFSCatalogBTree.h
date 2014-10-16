@@ -7,13 +7,14 @@
 #include <ctime>
 #include "hfsplus.h"
 #include "HFSBTreeNode.h"
+#include "CacheZone.h"
 #include <memory>
 
 class HFSCatalogBTree : protected HFSBTree
 {
 public:
 	// using HFSBTree::HFSBTree;
-	HFSCatalogBTree(std::shared_ptr<HFSFork> fork, HFSVolume* volume);
+	HFSCatalogBTree(std::shared_ptr<HFSFork> fork, HFSVolume* volume, CacheZone* zone);
 
 	int listDirectory(const std::string& path, std::map<std::string, HFSPlusCatalogFileOrFolder>& contents);
 	int stat(std::string path, HFSPlusCatalogFileOrFolder* s, bool noByteSwap = false);

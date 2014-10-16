@@ -8,7 +8,8 @@
 #include "SubReader.h"
 
 HFSVolume::HFSVolume(std::shared_ptr<Reader> reader)
-: m_reader(reader), m_embeddedReader(nullptr), m_overflowExtents(nullptr), m_attributes(nullptr)
+: m_reader(reader), m_embeddedReader(nullptr), m_overflowExtents(nullptr), m_attributes(nullptr),
+  m_fileZone(6400), m_btreeZone(6400)
 {
 	static_assert(sizeof(HFSPlusVolumeHeader) >= sizeof(HFSMasterDirectoryBlock), "Bad read is about to happen");
 	
@@ -25,12 +26,12 @@ HFSVolume::HFSVolume(std::shared_ptr<Reader> reader)
 		throw std::runtime_error("Invalid HFS+/HFSX signature");
 
 	std::shared_ptr<HFSFork> fork (new HFSFork(this, m_header.extentsFile));
-	m_overflowExtents = new HFSExtentsOverflowBTree(fork);
+	m_overflowExtents = new HFSExtentsOverflowBTree(fork, &m_btreeZone);
 	
 	if (m_header.attributesFile.logicalSize != 0)
 	{
 		fork.reset(new HFSFork(this, m_header.attributesFile, kHFSAttributesFileID));
-		m_attributes = new HFSAttributeBTree(fork);
+		m_attributes = new HFSAttributeBTree(fork, &m_btreeZone);
 	}
 }
 
@@ -89,7 +90,7 @@ void HFSVolume::usage(uint64_t& totalBytes, uint64_t& freeBytes) const
 HFSCatalogBTree* HFSVolume::rootCatalogTree()
 {
 	std::shared_ptr<HFSFork> fork (new HFSFork(this, m_header.catalogFile, kHFSCatalogFileID));
-	HFSCatalogBTree* btree = new HFSCatalogBTree(fork, this);
+	HFSCatalogBTree* btree = new HFSCatalogBTree(fork, this, &m_btreeZone);
 	
 	return btree;
 }
