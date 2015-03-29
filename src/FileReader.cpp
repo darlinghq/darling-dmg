@@ -2,11 +2,21 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <cstring>
+#include <stdexcept>
+#include <sstream>
 
 FileReader::FileReader(const std::string& path)
 : m_fd(-1)
 {
 	m_fd = ::open(path.c_str(), O_RDONLY);
+
+	if (m_fd == -1)
+	{
+		std::stringstream ss;
+		ss << "Cannot open " << path << ": " << strerror(errno);
+		throw std::runtime_error(ss.str());
+	}
 }
 
 FileReader::~FileReader()
