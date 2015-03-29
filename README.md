@@ -1,6 +1,8 @@
 # darling-dmg
 
-This project allows ordinary users to directly mount OS X disk images under Linux via FUSE.
+This project allows ordinary users to directly mount OS X disk images under Linux via FUSE. darling-dmg is part of Darling - http://www.darlinghq.org
+
+Without darling-dmg, the only way to do this would be to menually extract the DMG file, become root and mount the HFS+ filesystem as root. This is slow, wasteful and may even crash your system. Author has seen the Linux HFS+ implementation cause kernel crashes.
 
 ## Supported file types
 
@@ -19,4 +21,8 @@ Read only access only.
 ### Accessing resource forks
 
 Resource forks are available via xattrs (extended attributes) or prefferably under the name ````/original/filename#..namedfork#rsrc````.
+
+### Reusability
+
+Some people have had success with using darling-dmg as a library for their own use.
 
