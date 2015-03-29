@@ -13,6 +13,7 @@ public:
 	
 	virtual int32_t read(void* buf, int32_t count, uint64_t offset) override;
 	virtual uint64_t length() override;
+	virtual void adviseOptimalBlock(uint64_t offset, uint64_t& blockStart, uint64_t& blockEnd) override;
 private:
 	int32_t readRun(void* buf, int32_t runIndex, uint64_t offsetInSector, int32_t count);
 private:

@@ -33,6 +33,23 @@ DMGPartition::~DMGPartition()
 	delete m_table;
 }
 
+void DMGPartition::adviseOptimalBlock(uint64_t offset, uint64_t& blockStart, uint64_t& blockEnd)
+{
+	std::map<uint64_t, uint32_t>::iterator itRun = m_sectors.upper_bound(offset / SECTOR_SIZE);
+
+	if (itRun == m_sectors.begin())
+		throw std::runtime_error("Invalid run sector data");
+
+	if (itRun == m_sectors.end())
+		blockEnd = length();
+	else
+		blockEnd = itRun->first * SECTOR_SIZE;
+
+	itRun--;
+
+	blockStart = itRun->first * SECTOR_SIZE;
+}
+
 int32_t DMGPartition::read(void* buf, int32_t count, uint64_t offset)
 {
 	int32_t done = 0;
