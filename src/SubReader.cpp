@@ -19,3 +19,16 @@ uint64_t SubReader::length()
 {
 	return m_size;
 }
+
+void SubReader::adviseOptimalBlock(uint64_t offset, uint64_t& blockStart, uint64_t& blockEnd)
+{
+	m_parent->adviseOptimalBlock(m_offset+offset, blockStart, blockEnd);
+
+	if (blockStart < m_offset)
+		blockStart = m_offset;
+	blockStart -= m_offset;
+
+	blockEnd -= m_offset;
+	if (blockEnd > m_size)
+		blockEnd = m_size;
+}
