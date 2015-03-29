@@ -3,6 +3,7 @@
 #include <stdexcept>
 #include "be.h"
 
+// HFS+ compresses data in 64KB blocks
 static const unsigned int RUN_LENGTH = 64*1024;
 
 HFSZlibReader::HFSZlibReader(std::shared_ptr<Reader> parent, uint64_t uncompressedSize, bool singleRun)
@@ -42,6 +43,12 @@ HFSZlibReader::HFSZlibReader(std::shared_ptr<Reader> parent, uint64_t uncompress
 HFSZlibReader::~HFSZlibReader()
 {
 	zlibExit();
+}
+
+void HFSZlibReader::adviseOptimalBlock(uint64_t offset, uint64_t& blockStart, uint64_t& blockEnd)
+{
+	blockStart = offset & ~(RUN_LENGTH-1);
+	blockEnd = std::min(blockStart + RUN_LENGTH, length());
 }
 
 void HFSZlibReader::zlibInit()

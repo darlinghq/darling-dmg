@@ -1,6 +1,7 @@
 #include "CacheZone.h"
 #include <algorithm>
 #include <cstring>
+#include <iostream>
 
 CacheZone::CacheZone(size_t maxBlocks)
 : m_maxBlocks(maxBlocks)
@@ -18,8 +19,12 @@ void CacheZone::store(const std::string& vfile, uint64_t blockId, const uint8_t*
 	CacheKey key = CacheKey(blockId, vfile);
 	CacheEntry entry;
 	std::unordered_map<CacheKey, CacheEntry>::iterator it;
+
+#ifdef DEBUG
+	std::cout << "CacheZone::store(): blockId=" << blockId << ", bytes=" << bytes << std::endl;
+#endif
 	
-	entry.data = std::vector<uint8_t>(data, data+bytes);
+	std::copy(data, data+bytes, entry.data.begin());
 	
 	it = m_cache.insert(m_cache.begin(), { key, entry });
 	m_cacheAge.push_back(key);
@@ -33,6 +38,10 @@ size_t CacheZone::get(const std::string& vfile, uint64_t blockId, uint8_t* data,
 {
 	CacheKey key = CacheKey(blockId, vfile);
 	auto it = m_cache.find(key);
+
+#ifdef DEBUG
+	std::cout << "CacheZone::get(): blockId=" << blockId << ", offset=" << offset << ", maxBytes=" << maxBytes << std::endl;
+#endif
 	
 	m_queries++;
 	

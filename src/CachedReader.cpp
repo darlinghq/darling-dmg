@@ -1,5 +1,7 @@
 #include "CachedReader.h"
 #include <stdexcept>
+#include <algorithm>
+#include <iostream>
 
 //#define NO_CACHE
 
@@ -14,6 +16,10 @@ int32_t CachedReader::read(void* buf, int32_t count, uint64_t offset)
 	int32_t done = 0; // from 0 till count
 	int32_t lastFetchPos = 0; // pos from 0 till count
 	
+#ifdef DEBUG
+	std::cout << "CachedReader::read(): offset=" << offset << ", count=" << count << std::endl;
+#endif
+
 	if (count+offset > length())
 		count = length() - offset;
 	
@@ -27,7 +33,9 @@ int32_t CachedReader::read(void* buf, int32_t count, uint64_t offset)
 		if (done == 0) // this may also happen when cache doesn't contain a full block, but not on a R/O filesystem
 			blockOffset = offset % CacheZone::BLOCK_SIZE;
 		
-		thistime -= blockOffset;
+		thistime = std::min<int32_t>(thistime, CacheZone::BLOCK_SIZE - blockOffset);
+		if (thistime == 0)
+			throw std::logic_error("Internal error: thistime == 0");
 		
 		fromCache = m_zone->get(m_tag, blockNumber, ((uint8_t*) buf) + done, blockOffset, thistime);
 		
@@ -45,7 +53,7 @@ int32_t CachedReader::read(void* buf, int32_t count, uint64_t offset)
 			}
 			
 			// We move lastFetchPos past the current cached read
-			lastFetchPos = offset+done+thistime;
+			lastFetchPos = done+thistime;
 			
 			done += fromCache;
 		}
@@ -74,40 +82,64 @@ int32_t CachedReader::read(void* buf, int32_t count, uint64_t offset)
 
 void CachedReader::nonCachedRead(void* buf, int32_t count, uint64_t offset)
 {
-	int32_t cachingPos;
-	int32_t rd;
-	
-	rd = m_reader->read(buf, count, offset);
+	uint64_t blockStart, blockEnd;
+	std::unique_ptr<uint8_t[]> optimalBlockBuffer;
+	uint32_t optimalBlockBufferSize = 0;
+	uint64_t readPos = offset;
 
-	if (rd != count)
-		throw std::runtime_error("Short read from backing reader");
+#ifdef DEBUG
+	std::cout << "CachedReader::nonCachedRead(): offset=" << offset << ", count=" << count << std::endl;
+#endif
 
-	// Save whatever was read into cache
-	cachingPos = offset;
-	
-	// Round up to BLOCK_SIZE. unaligned blocks are not possible
-	if ((offset % CacheZone::BLOCK_SIZE) > 0)
-		cachingPos += CacheZone::BLOCK_SIZE - (offset % CacheZone::BLOCK_SIZE);
-	
-	while (cachingPos < offset + rd)
+	while (readPos < offset+count)
 	{
-		int32_t thistime = CacheZone::BLOCK_SIZE;
-		int32_t remaining = (offset+rd) - cachingPos;
-		
-		if (remaining < CacheZone::BLOCK_SIZE)
+		int32_t thistime, rd;
+
+		m_reader->adviseOptimalBlock(readPos, blockStart, blockEnd);
+
+		// Does the returned block contain what we asked for?
+		if (blockStart > offset || blockEnd <= offset)
+			throw std::runtime_error("Illegal range returned by adviseOptimalBlock()");
+
+		thistime = blockEnd-blockStart;
+		if (thistime > optimalBlockBufferSize)
 		{
-			// We don't have a full block
-			// Is it because we're at EOF? Cache it nontheless.
-			
-			if (cachingPos + CacheZone::BLOCK_SIZE > length())
-				thistime = remaining;
-			else
-				break; // We don't cache short blocks only caused by short reads
+			optimalBlockBufferSize = thistime;
+			optimalBlockBuffer.reset(new uint8_t[optimalBlockBufferSize]);
 		}
-		
-		m_zone->store(m_tag, cachingPos / CacheZone::BLOCK_SIZE, ((uint8_t*) buf) + cachingPos - offset, thistime);
-		
-		cachingPos += thistime;
+
+		rd = m_reader->read(optimalBlockBuffer.get(), thistime, blockStart);
+
+		if (rd < thistime)
+			throw std::runtime_error("Short read from backing reader");
+
+		// Align to the next BLOCK_SIZE aligned block
+		uint64_t cachePos = (blockStart + (CacheZone::BLOCK_SIZE-1)) & ~(CacheZone::BLOCK_SIZE-1);
+
+		// And start storing everything we've just read into cache
+		while (cachePos < blockEnd)
+		{
+			m_zone->store(m_tag, cachePos / CacheZone::BLOCK_SIZE, &optimalBlockBuffer[cachePos - blockStart],
+					std::min<size_t>(blockEnd-cachePos, CacheZone::BLOCK_SIZE));
+			cachePos += CacheZone::BLOCK_SIZE;
+		}
+
+		// Copy into output buffer
+		uint32_t optimalOffset = 0; // offset into optimalBlockBuffer to start copying from
+		uint32_t outputOffset; // offset into 'buf' to copy to
+		uint32_t toCopy;
+
+		if (readPos > blockStart)
+			optimalOffset = readPos - blockStart;
+		outputOffset = readPos - offset;
+		toCopy = std::min<uint32_t>(offset+count - readPos, thistime);
+
+#ifdef DEBUG
+		std::cout << "Copying " << toCopy << " bytes into output buffer at offset " << outputOffset << " from internal offset " << optimalOffset << std::endl;
+#endif
+		std::copy_n(&optimalBlockBuffer[optimalOffset], toCopy, reinterpret_cast<uint8_t*>(buf) + outputOffset);
+
+		readPos += toCopy;
 	}
 }
 

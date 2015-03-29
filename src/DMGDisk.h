@@ -12,7 +12,7 @@ public:
 	DMGDisk(std::shared_ptr<Reader>reader);
 	~DMGDisk();
 
-	virtual const std::vector<Partition>& partitions() const { return m_partitions; }
+	virtual const std::vector<Partition>& partitions() const override { return m_partitions; }
 	virtual std::shared_ptr<Reader> readerForPartition(int index) override;
 
 	static bool isDMG(std::shared_ptr<Reader> reader);

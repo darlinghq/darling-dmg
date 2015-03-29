@@ -13,12 +13,32 @@ include(FindLibxml2)
 find_package(Libxml2 REQUIRED)
 include_directories(${LIBXML2_INCLUDE_DIR})
 
+if (WITH_TESTS)
+	enable_testing()
+	find_package(Boost COMPONENTS unit_test_framework REQUIRED)
+
+	add_definitions(-DBOOST_TEST_DYN_LINK -DDEBUG)
+
+	set(CacheTest_SRC
+		test/CacheTest.cpp
+		src/CacheZone.cpp
+		src/CachedReader.cpp
+		src/Reader.cpp
+		src/MemoryReader.cpp
+	)
+
+	add_executable(CacheTest ${CacheTest_SRC})
+	target_link_libraries(CacheTest ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY})
+	add_test(NAME CacheTest COMMAND CacheTest)
+endif (WITH_TESTS)
+
 add_executable(darling-dmg
 	#src/main-test-hfs+.cpp
 	#src/main-test-dmg.cpp
 	src/main-fuse.cpp
 	
 	src/unichar.cpp
+	src/Reader.cpp
 	src/FileReader.cpp
 	src/HFSVolume.cpp
 	src/AppleDisk.cpp

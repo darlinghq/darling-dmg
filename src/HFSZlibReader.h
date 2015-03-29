@@ -14,6 +14,7 @@ public:
 	
 	virtual int32_t read(void* buf, int32_t count, uint64_t offset) override;
 	virtual uint64_t length() override;
+	virtual void adviseOptimalBlock(uint64_t offset, uint64_t& blockStart, uint64_t& blockEnd) override;
 private:
 	int32_t readRun(int runIndex, void* buf, int32_t count, uint64_t offset);
 	void zlibInit();

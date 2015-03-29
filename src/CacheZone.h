@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include <list>
+#include <array>
 #include <unordered_map>
 
 namespace std {
@@ -41,7 +42,7 @@ private:
 	struct CacheEntry
 	{
 		std::list<CacheKey>::iterator itAge;
-		std::vector<uint8_t> data;
+		std::array<uint8_t, BLOCK_SIZE> data;
 	};
 	
 	typedef std::unordered_map<CacheKey, CacheEntry> Cache;
