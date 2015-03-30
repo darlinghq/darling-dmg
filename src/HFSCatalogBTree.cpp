@@ -395,7 +395,9 @@ void HFSCatalogBTree::dumpTree(int nodeIndex, int depth) const
 				
 				keyName.toUTF8String(str);
 				
+#ifdef DEBUG
 				std::cout << "dumpTree(i): " << std::string(depth, ' ') << str << "(" << be(key->parentID) << ")\n";
+#endif
 				
 				// recurse down
 				uint32_t* childIndex = node.getRecordData<uint32_t>(i);
@@ -417,7 +419,9 @@ void HFSCatalogBTree::dumpTree(int nodeIndex, int depth) const
 				keyName = UnicodeString((char*)recordKey->nodeName.string, be(recordKey->nodeName.length)*2, g_utf16be, error);
 				keyName.toUTF8String(str);
 				
+#ifdef DEBUG
 				std::cout << "dumpTree(l): " << std::string(depth, ' ') << str << "(" << be(recordKey->parentID) << ")\n";
+#endif
 			}
 			
 			break;
