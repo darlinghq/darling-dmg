@@ -70,7 +70,10 @@ int DMGDecompressor::readSome(char** ptr)
 void DMGDecompressor::processed(int bytes)
 {
 	m_pos += bytes;
+
+#ifdef DEBUG
 	std::cout << "Processed: " << bytes << ", total: " << m_pos << std::endl;
+#endif
 }
 
 DMGDecompressor_Zlib::DMGDecompressor_Zlib(std::shared_ptr<Reader> reader)
@@ -143,7 +146,9 @@ int32_t DMGDecompressor_Bzip2::decompress(void* output, int32_t outputBytes)
 	int inputBytes;
 	int32_t done = 0;
 	
+#ifdef DEBUG
 	std::cout << "bz2: Asked to provide " << outputBytes << " bytes\n";
+#endif
 
 	do
 	{

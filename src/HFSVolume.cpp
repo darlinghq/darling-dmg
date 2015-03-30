@@ -53,7 +53,9 @@ void HFSVolume::processEmbeddedHFSPlus(HFSMasterDirectoryBlock* block)
 	offset = blockSize * be(block->drEmbedExtent.startBlock) + 512 * be(block->drAlBlSt);
 	length = blockSize * be(block->drEmbedExtent.blockCount);
 	
+#ifdef DEBUG
 	std::cout << "HFS+ partition is embedded at offset: " << offset << ", length: " << length << std::endl;
+#endif
 	
 	m_embeddedReader.reset(new SubReader(m_reader, offset, length));
 	m_reader = m_embeddedReader;
