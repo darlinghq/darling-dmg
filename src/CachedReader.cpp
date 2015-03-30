@@ -98,7 +98,7 @@ void CachedReader::nonCachedRead(void* buf, int32_t count, uint64_t offset)
 		m_reader->adviseOptimalBlock(readPos, blockStart, blockEnd);
 
 		// Does the returned block contain what we asked for?
-		if (blockStart > offset || blockEnd <= offset)
+		if (blockStart > readPos || blockEnd <= readPos)
 			throw std::runtime_error("Illegal range returned by adviseOptimalBlock()");
 
 		thistime = blockEnd-blockStart;
