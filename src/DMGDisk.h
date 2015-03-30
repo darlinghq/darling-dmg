@@ -3,6 +3,7 @@
 #include "PartitionedDisk.h"
 #include "Reader.h"
 #include "dmg.h"
+#include "CacheZone.h"
 #include <libxml/parser.h>
 #include <libxml/xpath.h>
 
@@ -28,6 +29,7 @@ private:
 	std::vector<Partition> m_partitions;
 	xmlDocPtr m_kolyXML;
 	int m_blkxBlocks;
+	CacheZone m_zone;
 };
 
 #endif

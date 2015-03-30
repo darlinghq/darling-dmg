@@ -6,12 +6,14 @@
 #include <openssl/bio.h>
 #include <openssl/evp.h>
 #include <memory>
+#include <sstream>
 #include "DMGPartition.h"
 #include "AppleDisk.h"
 #include "GPTDisk.h"
+#include "CachedReader.h"
 
 DMGDisk::DMGDisk(std::shared_ptr<Reader> reader)
-	: m_reader(reader)
+	: m_reader(reader), m_zone(4000)
 {
 	uint64_t offset = m_reader->length();
 	UDIFResourceFile udif;
@@ -222,7 +224,14 @@ std::shared_ptr<Reader> DMGDisk::readerForPartition(int index)
 			continue;
 		
 		if (be(table->firstSectorNumber)*512 == m_partitions[index].offset)
-			return std::shared_ptr<Reader>(new DMGPartition(m_reader, table));
+		{
+			std::stringstream partName;
+			partName << "part-" << index;
+
+			return std::shared_ptr<Reader>(
+						new CachedReader(std::shared_ptr<Reader>(new DMGPartition(m_reader, table)), &m_zone, partName.str())
+			);
+		}
 		
 		delete table;
 	}

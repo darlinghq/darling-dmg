@@ -108,6 +108,9 @@ void CachedReader::nonCachedRead(void* buf, int32_t count, uint64_t offset)
 			optimalBlockBuffer.reset(new uint8_t[optimalBlockBufferSize]);
 		}
 
+#ifdef DEBUG
+		std::cout << "Reading from backing reader: offset=" << blockStart << ", count=" << thistime << std::endl;
+#endif
 		rd = m_reader->read(optimalBlockBuffer.get(), thistime, blockStart);
 
 		if (rd < thistime)
