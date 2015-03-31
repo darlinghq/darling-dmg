@@ -8,6 +8,7 @@
 //#include <cstdio>
 #include <iostream>
 #include "SubReader.h"
+#include "exceptions.h"
 
 static const int SECTOR_SIZE = 512;
 
@@ -22,9 +23,11 @@ DMGPartition::DMGPartition(std::shared_ptr<Reader> disk, BLKXTable* table)
 		
 		m_sectors[be(m_table->runs[i].sectorStart)] = i;
 		
+#ifdef DEBUG
 		std::cout << "Sector " << i << " has type 0x" << std::hex << uint32_t(type) << std::dec << ", starts at byte "
 			<< be(m_table->runs[i].sectorStart)*512l << ", compressed length: "
 			<< be(m_table->runs[i].compLength) << ", compressed offset: " << be(m_table->runs[i].compOffset) + be(m_table->dataStart) << std::endl;
+#endif
 	}
 }
 
@@ -38,7 +41,7 @@ void DMGPartition::adviseOptimalBlock(uint64_t offset, uint64_t& blockStart, uin
 	std::map<uint64_t, uint32_t>::iterator itRun = m_sectors.upper_bound(offset / SECTOR_SIZE);
 
 	if (itRun == m_sectors.begin())
-		throw std::runtime_error("Invalid run sector data");
+		throw io_error("Invalid run sector data");
 
 	if (itRun == m_sectors.end())
 		blockEnd = length();
@@ -64,7 +67,7 @@ int32_t DMGPartition::read(void* buf, int32_t count, uint64_t offset)
 			break; // read beyond EOF
 		
 		if (itRun == m_sectors.begin())
-			throw std::runtime_error("Invalid run sector data");
+			throw io_error("Invalid run sector data");
 		
 		itRun--; // move to the sector we want to read
 
@@ -76,7 +79,7 @@ int32_t DMGPartition::read(void* buf, int32_t count, uint64_t offset)
 		
 		thistime = readRun(((char*)buf) + done, itRun->second, offsetInSector, count-done);
 		if (!thistime)
-			throw std::runtime_error("Unexpected EOF from readRun");
+			throw io_error("Unexpected EOF from readRun");
 		
 		done += thistime;
 	}
@@ -131,7 +134,7 @@ int32_t DMGPartition::readRun(void* buf, int32_t runIndex, uint64_t offsetInSect
 				//std::cout << "Decompressor returned " << dec << std::endl;
 				
 				if (dec < 0)
-					throw std::runtime_error("Error decompressing stream");
+					throw io_error("Error decompressing stream");
 				else if (dec == 0)
 					break;
 				

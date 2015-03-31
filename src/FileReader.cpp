@@ -4,7 +4,8 @@
 #include <sys/stat.h>
 #include <cstring>
 #include <stdexcept>
-#include <sstream>
+#include <iostream>
+#include "exceptions.h"
 
 FileReader::FileReader(const std::string& path)
 : m_fd(-1)
@@ -13,9 +14,10 @@ FileReader::FileReader(const std::string& path)
 
 	if (m_fd == -1)
 	{
-		std::stringstream ss;
-		ss << "Cannot open " << path << ": " << strerror(errno);
-		throw std::runtime_error(ss.str());
+#ifdef DEBUG
+		std::cerr << "Cannot open " << path << ": " << strerror(errno) << std::endl;
+#endif
+		throw file_not_found_error(path);
 	}
 }
 

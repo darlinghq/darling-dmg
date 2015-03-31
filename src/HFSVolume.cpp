@@ -6,6 +6,7 @@
 #include "HFSExtentsOverflowBTree.h"
 #include "HFSAttributeBTree.h"
 #include "SubReader.h"
+#include "exceptions.h"
 
 HFSVolume::HFSVolume(std::shared_ptr<Reader> reader)
 : m_reader(reader), m_embeddedReader(nullptr), m_overflowExtents(nullptr), m_attributes(nullptr),
@@ -14,7 +15,7 @@ HFSVolume::HFSVolume(std::shared_ptr<Reader> reader)
 	static_assert(sizeof(HFSPlusVolumeHeader) >= sizeof(HFSMasterDirectoryBlock), "Bad read is about to happen");
 	
 	if (m_reader->read(&m_header, sizeof(m_header), 1024) != sizeof(m_header))
-		throw std::runtime_error("Cannot read volume header");
+		throw io_error("Cannot read volume header");
 	
 	if (be(m_header.signature) == HFS_SIGNATURE)
 	{
@@ -23,7 +24,7 @@ HFSVolume::HFSVolume(std::shared_ptr<Reader> reader)
 	}
 	
 	if (be(m_header.signature) != HFSP_SIGNATURE && be(m_header.signature) != HFSX_SIGNATURE)
-		throw std::runtime_error("Invalid HFS+/HFSX signature");
+		throw io_error("Invalid HFS+/HFSX signature");
 
 	std::shared_ptr<HFSFork> fork (new HFSFork(this, m_header.extentsFile));
 	m_overflowExtents = new HFSExtentsOverflowBTree(fork, &m_btreeZone);
@@ -48,12 +49,14 @@ void HFSVolume::processEmbeddedHFSPlus(HFSMasterDirectoryBlock* block)
 	uint64_t offset, length;
 
 	if (be(block->drEmbedSigWord) != HFSP_SIGNATURE && be(block->drEmbedSigWord) != HFSX_SIGNATURE)
-		throw std::runtime_error("Original HFS is not supported");
+		throw function_not_implemented_error("Original HFS is not supported");
 
 	offset = blockSize * be(block->drEmbedExtent.startBlock) + 512 * be(block->drAlBlSt);
 	length = blockSize * be(block->drEmbedExtent.blockCount);
 	
+#ifdef DEBUG
 	std::cout << "HFS+ partition is embedded at offset: " << offset << ", length: " << length << std::endl;
+#endif
 	
 	m_embeddedReader.reset(new SubReader(m_reader, offset, length));
 	m_reader = m_embeddedReader;

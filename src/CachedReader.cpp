@@ -2,6 +2,7 @@
 #include <stdexcept>
 #include <algorithm>
 #include <iostream>
+#include "exceptions.h"
 
 //#define NO_CACHE
 
@@ -99,7 +100,7 @@ void CachedReader::nonCachedRead(void* buf, int32_t count, uint64_t offset)
 
 		// Does the returned block contain what we asked for?
 		if (blockStart > readPos || blockEnd <= readPos)
-			throw std::runtime_error("Illegal range returned by adviseOptimalBlock()");
+			throw std::logic_error("Illegal range returned by adviseOptimalBlock()");
 
 		thistime = blockEnd-blockStart;
 		if (thistime > optimalBlockBufferSize)
@@ -114,7 +115,7 @@ void CachedReader::nonCachedRead(void* buf, int32_t count, uint64_t offset)
 		rd = m_reader->read(optimalBlockBuffer.get(), thistime, blockStart);
 
 		if (rd < thistime)
-			throw std::runtime_error("Short read from backing reader");
+			throw io_error("Short read from backing reader");
 
 		// Align to the next BLOCK_SIZE aligned block
 		uint64_t cachePos = (blockStart + (CacheZone::BLOCK_SIZE-1)) & ~(CacheZone::BLOCK_SIZE-1);

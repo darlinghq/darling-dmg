@@ -62,6 +62,8 @@ add_executable(darling-dmg
 	src/ResourceFork.cpp
 	src/CacheZone.cpp
 	src/CachedReader.cpp
+
+	src/HFSHighLevelVolume.cpp
 )
 
 target_link_libraries(darling-dmg -licuuc -lcrypto -lz -lbz2 -lfuse ${LIBXML2_LIBRARY})

@@ -7,32 +7,24 @@
 #include <stdexcept>
 #include <limits>
 #include "HFSVolume.h"
-#include "HFSCatalogBTree.h"
 #include "AppleDisk.h"
 #include "GPTDisk.h"
 #include "DMGDisk.h"
 #include "FileReader.h"
-#include "MemoryReader.h"
-#include "HFSZlibReader.h"
-#include "HFSAttributeBTree.h"
-#include "DMGDecompressor.h"
-#include "ResourceFork.h"
 #include "CachedReader.h"
-#include "decmpfs.h"
+#include "exceptions.h"
+#include "HFSHighLevelVolume.h"
 
 static const char* RESOURCE_FORK_SUFFIX = "#..namedfork#rsrc";
 static const char* XATTR_RESOURCE_FORK = "com.apple.ResourceFork";
 static const char* XATTR_FINDER_INFO = "com.apple.FinderInfo";
 
 std::shared_ptr<Reader> g_fileReader;
-PartitionedDisk* g_partitions;
-HFSVolume* g_volume;
-HFSCatalogBTree* g_tree;
+std::unique_ptr<HFSHighLevelVolume> g_volume;
+std::unique_ptr<PartitionedDisk> g_partitions;
 
 int main(int argc, char** argv)
 {
-	int argi, rv;
-	
 	try
 	{
 		struct fuse_operations ops;
@@ -70,40 +62,41 @@ int main(int argc, char** argv)
 		fuse_opt_add_arg(&args, "-s");
 	
 		std::cout << "Everything looks OK, disk mounted\n";
-		// g_tree->dumpTree();
 
-		rv = fuse_main(args.argc, args.argv, &ops, 0);
+		return fuse_main(args.argc, args.argv, &ops, 0);
 	}
 	catch (const std::exception& e)
 	{
 		std::cerr << "Error: " << e.what() << std::endl;
-		rv = 1;
+		return 1;
 	}
-	
-	delete g_tree;
-	delete g_volume;
-	delete g_partitions;
-	
-	return rv;
 }
+
+void showHelp(const char* argv0)
+{
+	std::cerr << "Usage: " << argv0 << " <file> <mount-point> [fuse args]\n\n";
+	std::cerr << ".DMG files and raw disk images can be mounted.\n";
+	std::cerr << argv0 << " auttomatically selects the first HFS+/HFSX partition.\n";
+}
+
 
 void openDisk(const char* path)
 {
 	int partIndex = -1;
-	uint64_t volumeSize;
+	std::shared_ptr<HFSVolume> volume;
 
 	g_fileReader.reset(new FileReader(path));
 
 	if (DMGDisk::isDMG(g_fileReader))
-		g_partitions = new DMGDisk(g_fileReader);
+		g_partitions.reset(new DMGDisk(g_fileReader));
 	else if (GPTDisk::isGPTDisk(g_fileReader))
-		g_partitions = new GPTDisk(g_fileReader);
+		g_partitions.reset(new GPTDisk(g_fileReader));
 	else if (AppleDisk::isAppleDisk(g_fileReader))
-		g_partitions = new AppleDisk(g_fileReader);
+		g_partitions.reset(new AppleDisk(g_fileReader));
 	else if (HFSVolume::isHFSPlus(g_fileReader))
-		g_volume = new HFSVolume(g_fileReader);
+		volume.reset(new HFSVolume(g_fileReader));
 	else
-		throw std::runtime_error("Unsupported file format");
+		throw function_not_implemented_error("Unsupported file format");
 
 	if (g_partitions)
 	{
@@ -122,447 +115,167 @@ void openDisk(const char* path)
 		}
 
 		if (partIndex == -1)
-			throw std::runtime_error("No suitable partition found in file");
+			throw function_not_implemented_error("No suitable partition found in file");
 
-		g_volume = new HFSVolume(g_partitions->readerForPartition(partIndex));
+		volume.reset(new HFSVolume(g_partitions->readerForPartition(partIndex)));
 	}
 	
-	volumeSize = g_volume->volumeSize();
-	if (volumeSize < 50*1024*1024)
+	g_volume.reset(new HFSHighLevelVolume(volume));
+}
+
+int handle_exceptions(std::function<int()> func)
+{
+	try
 	{
-		// limit cache sizes to volume size
-		g_volume->getFileZone()->setMaxBlocks(volumeSize / CacheZone::BLOCK_SIZE / 2);
-		g_volume->getBtreeZone()->setMaxBlocks(volumeSize / CacheZone::BLOCK_SIZE / 2);
+		return func();
 	}
-	
-	g_tree = g_volume->rootCatalogTree();
-}
-
-void showHelp(const char* argv0)
-{
-	std::cerr << "Usage: " << argv0 << " <file> <mount-point> [fuse args]\n\n";
-	std::cerr << ".DMG files and raw disk images can be mounted.\n";
-	std::cerr << argv0 << " auttomatically selects the first HFS+/HFSX partition.\n";
-}
-
-static void hfs_nativeToStat(const HFSPlusCatalogFileOrFolder& ff, struct stat* stat, bool resourceFork = false)
-{
-	memset(stat, 0, sizeof(*stat));
-
-	stat->st_atime = HFSCatalogBTree::appleToUnixTime(ff.file.accessDate);
-	stat->st_mtime = HFSCatalogBTree::appleToUnixTime(ff.file.contentModDate);
-	stat->st_ctime = HFSCatalogBTree::appleToUnixTime(ff.file.attributeModDate);
-	stat->st_mode = ff.file.permissions.fileMode;
-	stat->st_uid = ff.file.permissions.ownerID;
-	stat->st_gid = ff.file.permissions.groupID;
-	stat->st_ino = ff.file.fileID;
-	stat->st_blksize = 512;
-	stat->st_nlink = 1;
-
-	if (ff.file.recordType == RecordType::kHFSPlusFileRecord)
+	catch (const file_not_found_error& e)
 	{
-		if (!resourceFork)
-		{
-			stat->st_size = ff.file.dataFork.logicalSize;
-			stat->st_blocks = ff.file.dataFork.totalBlocks;
-		}
-		else
-		{
-			stat->st_size = ff.file.resourceFork.logicalSize;
-			stat->st_blocks = ff.file.resourceFork.totalBlocks;
-		}
-		
-		if (S_ISCHR(stat->st_mode) || S_ISBLK(stat->st_mode))
-			stat->st_rdev = ff.file.permissions.special.rawDevice;
+		std::cerr << "File not found: " << e.what() << std::endl;
+		return -ENOENT;
 	}
-	
-	if (!stat->st_mode)
+	catch (const function_not_implemented_error& e)
 	{
-		if (ff.file.recordType == RecordType::kHFSPlusFileRecord)
-		{
-			stat->st_mode = S_IFREG;
-			stat->st_mode |= 0444;
-		}
-		else
-		{
-			stat->st_mode = S_IFDIR;
-			stat->st_mode |= 0555;
-		}
+		std::cerr << "Error: " << e.what() << std::endl;
+		return -ENOSYS;
 	}
-}
-
-static bool string_endsWith(const std::string& str, const std::string& what)
-{
-	if (str.size() < what.size())
-		return false;
-	else
-		return str.compare(str.size()-what.size(), what.size(), what) == 0;
-}
-
-decmpfs_disk_header* get_decmpfs(HFSCatalogNodeID cnid, std::vector<uint8_t>& holder)
-{
-	HFSAttributeBTree* attributes = g_volume->attributes();
-	decmpfs_disk_header* hdr;
-	
-	if (!attributes)
-		return nullptr;
-	
-	if (!attributes->getattr(cnid, DECMPFS_XATTR_NAME, holder))
-		return nullptr;
-	
-	if (holder.size() < 16)
-		return nullptr;
-	
-	hdr = (decmpfs_disk_header*) &holder[0];
-	if (hdr->compression_magic != DECMPFS_MAGIC)
-		return nullptr;
-	
-	return hdr;
+	catch (const io_error& e)
+	{
+		std::cerr << "I/O error: " << e.what() << std::endl;
+		return -EIO;
+	}
+	catch (const no_data_error& e)
+	{
+		std::cerr << "Non-existent data requested" << std::endl;
+		return -ENODATA;
+	}
+	catch (const std::logic_error& e)
+	{
+		std::cerr << "Fatal error: " << e.what() << std::endl;
+		abort();
+	}
+	catch (const std::exception& e)
+	{
+		std::cerr << "Unknown error: " << e.what() << std::endl;
+		return -EIO;
+	}
 }
 
 int hfs_getattr(const char* path, struct stat* stat)
 {
 	std::cerr << "hfs_getattr(" << path << ")\n";
-	
-	try
-	{
-		HFSPlusCatalogFileOrFolder ff;
-		std::string spath = path;
-		int rv;
-		bool resourceFork = false;
-		
-		if (string_endsWith(path, RESOURCE_FORK_SUFFIX))
-		{
-			spath.resize(spath.length() - strlen(RESOURCE_FORK_SUFFIX));
-			resourceFork = true;
-		}
-		
-		rv = g_tree->stat(spath.c_str(), &ff);
 
-		if (rv == 0)
-		{
-			hfs_nativeToStat(ff, stat, resourceFork);
-			
-			// Compressed FS support
-			if ((ff.file.permissions.ownerFlags & HFS_PERM_OFLAG_COMPRESSED) && !stat->st_size)
-			{
-				decmpfs_disk_header* hdr;
-				std::vector<uint8_t> xattrData;
-				
-				hdr = get_decmpfs(ff.file.fileID, xattrData);
-				
-				if (hdr != nullptr)
-					stat->st_size = hdr->uncompressed_size;
-			}
-		}
-		
-		std::cout << "hfs_getattr() -> " << rv << std::endl;
-
-		return rv;
-	}
-	catch (const std::exception& e)
-	{
-		std::cerr << "ERROR: " << e.what() << std::endl;
-		return -EIO;
-	}
+	return handle_exceptions([&]() {
+		*stat = g_volume->stat(path);
+		return 0;
+	});
 }
 
 int hfs_readlink(const char* path, char* buf, size_t size)
 {
-	try
-	{
-		std::cerr << "hfs_readlink(" << path << ")\n";
-		
+	std::cerr << "hfs_readlink(" << path << ")\n";
+
+	return handle_exceptions([&]() {
+
 		std::shared_ptr<Reader> file;
-		int rv = g_tree->openFile(path, file);
-		if (rv == 0)
-		{
-			int rd = file->read(buf, size, 0);
-			buf[rd] = 0;
-		}
-		
-		return rv;
-	}
-	catch (const std::exception& e)
-	{
-		std::cerr << "ERROR: " << e.what() << std::endl;
-		return -EIO;
-	}
+
+		file = g_volume->openFile(path);
+		return file->read(buf, size, 0);
+	});
 }
 
 int hfs_open(const char* path, struct fuse_file_info* info)
 {
-	try
-	{
-		std::cerr << "hfs_open(" << path << ")\n";
-		
+	std::cerr << "hfs_open(" << path << ")\n";
+
+	return handle_exceptions([&]() {
+
 		std::shared_ptr<Reader> file;
-		std::string spath = path;
-		int rv = 0;
-		bool resourceFork = false, compressed = false;
-		HFSPlusCatalogFileOrFolder ff;
-		
-		if (string_endsWith(path, RESOURCE_FORK_SUFFIX))
-		{
-			spath.resize(spath.length() - strlen(RESOURCE_FORK_SUFFIX));
-			resourceFork = true;
-		}
-		
-		if (!resourceFork)
-		{
-			// stat
-			rv = g_tree->stat(spath.c_str(), &ff);
-			compressed = ff.file.permissions.ownerFlags & HFS_PERM_OFLAG_COMPRESSED;
-		}
+		std::shared_ptr<Reader>* fh;
 
-		if (rv != 0)
-			return rv;
-		
-		if (!compressed)
-			rv = g_tree->openFile(spath.c_str(), file, resourceFork);
-		else
-		{
-			decmpfs_disk_header* hdr;
-			std::vector<uint8_t> holder;
-			
-			hdr = get_decmpfs(ff.file.fileID, holder);
-			
-			if (!hdr)
-				rv = -ENOENT;
-			else
-			{
-				std::cout << "Opening compressed file, compression type: " << int(hdr->compression_type) << std::endl;
-				switch (DecmpfsCompressionType(hdr->compression_type))
-				{
-					case DecmpfsCompressionType::UncompressedInline:
-						file.reset(new MemoryReader(hdr->attr_bytes, hdr->uncompressed_size));
-						rv = 0;
-						break;
-					case DecmpfsCompressionType::CompressedInline:
-						file.reset(new MemoryReader(hdr->attr_bytes, holder.size() - 16));
-						file.reset(new HFSZlibReader(file, hdr->uncompressed_size, true));
-						rv = 0;
-						break;
-					case DecmpfsCompressionType::CompressedResourceFork:
-					{
-						rv = g_tree->openFile(spath.c_str(), file, true);
-						if (rv == 0)
-						{
-							std::unique_ptr<ResourceFork> rsrc (new ResourceFork(file));
-							file = rsrc->getResource(DECMPFS_MAGIC, DECMPFS_ID);
-							
-							if (file)
-								file.reset(new HFSZlibReader(file, hdr->uncompressed_size));
-							else
-								rv = -ENOSYS;
-						}
-						break;
-					}
-					default:
-						rv = -ENOSYS;
-				}
-			}
-		}
+		file = g_volume->openFile(path);
+		fh = new std::shared_ptr<Reader>(file);
 
-		if (rv == 0)
-		{
-			std::shared_ptr<Reader>* fh = new std::shared_ptr<Reader>(new CachedReader(file, g_volume->getFileZone(), path));
-			info->fh = uint64_t(fh);
-		}
-		
-		return rv;
-	}
-	catch (const std::exception& e)
-	{
-		std::cerr << "ERROR: " << e.what() << std::endl;
-		return -EIO;
-	}
+		info->fh = uint64_t(fh);
+		return 0;
+	});
 }
 
 int hfs_read(const char* path, char* buf, size_t bytes, off_t offset, struct fuse_file_info* info)
 {
-	try
-	{
+	return handle_exceptions([&]() {
+
 		std::shared_ptr<Reader>& file = *(std::shared_ptr<Reader>*) info->fh;
 		return file->read(buf, bytes, offset);
-	}
-	catch (const std::exception& e)
-	{
-		std::cerr << "ERROR: " << e.what() << std::endl;
-		return -EIO;
-	}
+	});
 }
 
 int hfs_release(const char* path, struct fuse_file_info* info)
 {
-	std::cout << "File cache zone: hit rate: " << g_volume->getFileZone()->hitRate() << ", size: " << g_volume->getFileZone()->size() << " blocks\n";
-	try
-	{
+	// std::cout << "File cache zone: hit rate: " << g_volume->getFileZone()->hitRate() << ", size: " << g_volume->getFileZone()->size() << " blocks\n";
+
+	return handle_exceptions([&]() {
+
 		std::shared_ptr<Reader>* file = (std::shared_ptr<Reader>*) info->fh;
 		delete file;
 		info->fh = 0;
 		
 		return 0;
-	}
-	catch (const std::exception& e)
-	{
-		std::cerr << "ERROR: " << e.what() << std::endl;
-		return -EIO;
-	}
-}
-
-void processResourceForks(std::map<std::string, HFSPlusCatalogFileOrFolder>& contents)
-{
-	for (auto it = contents.begin(); it != contents.end(); it++)
-	{
-		if (it->second.file.recordType == RecordType::kHFSPlusFileRecord
-			&& !string_endsWith(it->first, RESOURCE_FORK_SUFFIX))
-		{
-			if (it->second.file.resourceFork.logicalSize > 0)
-			{
-				std::string rsrcForkName = it->first + RESOURCE_FORK_SUFFIX;
-				contents[rsrcForkName] = it->second;
-			}
-		}
-	}
+	});
 }
 
 int hfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info* info)
 {
-	try
-	{
-		std::cerr << "hfs_readdir(" << path << ")\n";
-		std::map<std::string, HFSPlusCatalogFileOrFolder> contents;
-		int rv = g_tree->listDirectory(path, contents);
-		
-		//processResourceForks(contents);
+	std::cerr << "hfs_readdir(" << path << ")\n";
 
-		if (rv == 0)
+	return handle_exceptions([&]() {
+		std::map<std::string, struct stat> contents;
+
+		contents = g_volume->listDirectory(path);
+
+		for (auto it = contents.begin(); it != contents.end(); it++)
 		{
-			for (auto it = contents.begin(); it != contents.end(); it++)
-			{
-				struct stat st;
-				hfs_nativeToStat(it->second, &st, string_endsWith(it->first, RESOURCE_FORK_SUFFIX));
-
-				if (filler(buf, it->first.c_str(), &st, 0) != 0)
-					return -ENOMEM;
-			}
+			if (filler(buf, it->first.c_str(), &it->second, 0) != 0)
+				return -ENOMEM;
 		}
 
-		return rv;
-	}
-	catch (const std::exception& e)
-	{
-		std::cerr << "ERROR: " << e.what() << std::endl;
-		return -EIO;
-	}
+		return 0;
+	});
+
 }
 
 int hfs_getxattr(const char* path, const char* name, char* value, size_t vlen)
 {
-	try
-	{
-		int rv;
-		std::string spath = path;
-		
-		std::cerr << "hfs_getxattr(" << path << ", " << name << ")\n";
-		
-		if (string_endsWith(spath, RESOURCE_FORK_SUFFIX))
-			spath.resize(spath.length() - strlen(RESOURCE_FORK_SUFFIX));
-		
-		if (strcmp(name, XATTR_RESOURCE_FORK) == 0)
-		{
-			std::shared_ptr<Reader> file;
+	std::cerr << "hfs_getxattr(" << path << ", " << name << ")\n";
 
-			rv = g_tree->openFile(spath.c_str(), file, true);
-			if (rv < 0)
-				return rv;
-		
-			rv = std::min<int>(std::numeric_limits<int>::max(), file->length());
-		
-			if (vlen >= rv)
-				rv = file->read(value, rv, 0);
-		}
-		else if (strcmp(name, XATTR_FINDER_INFO) == 0)
-		{
-			HFSPlusCatalogFileOrFolder ff;
-		
-			rv = g_tree->stat(spath.c_str(), &ff);
-			if (rv != 0)
-				return rv;
+	return handle_exceptions([&]() -> int {
+		std::vector<uint8_t> data;
 
-			rv = 32;
+		data = g_volume->getXattr(path, name);
 
-			if (vlen >= rv)
-			{
-				if (ff.file.recordType == RecordType::kHFSPlusFileRecord)
-				{
-					memcpy(value, &ff.file.userInfo, sizeof(ff.file.userInfo));
-					memcpy(value + sizeof(ff.file.userInfo), &ff.file.finderInfo, sizeof(ff.file.finderInfo));
-				}
-				else
-				{
-					memcpy(value, &ff.folder.userInfo, sizeof(ff.folder.userInfo));
-					memcpy(value + sizeof(ff.folder.userInfo), &ff.folder.finderInfo, sizeof(ff.folder.finderInfo));
-				}
-			}
-		}
-		else
-		{
-			HFSPlusCatalogFileOrFolder ff;
-			std::vector<uint8_t> data;
-			
-			// get CNID
-			rv = g_tree->stat(spath.c_str(), &ff);
-			
-			if (rv != 0)
-				return rv;
-			
-			if (g_volume->attributes()->getattr(ff.file.fileID, name, data))
-			{
-				if (vlen >= data.size())
-					memcpy(value, &data[0], data.size());
-			
-				rv = data.size();
-			}
-			else
-				rv = -ENODATA;
-		}
-		
-		return rv;
-	}
-	catch (const std::exception& e)
-	{
-		std::cerr << "ERROR: " << e.what() << std::endl;
-		return -EIO;
-	}
-}
+		if (vlen < data.size())
+			return -ERANGE;
 
-inline void insertString(std::vector<char>& dst, const char* str)
-{
-	dst.insert(dst.end(), str, str+strlen(str)+1);
+		memcpy(value, &data[0], data.size());
+		return data.size();
+	});
 }
 
 int hfs_listxattr(const char* path, char* buffer, size_t size)
 {
-	std::vector<char> output;
-	HFSPlusCatalogFileOrFolder ff;
-	int rv;
-	
-	insertString(output, XATTR_RESOURCE_FORK);
-	insertString(output, XATTR_FINDER_INFO);
-	
-	// get CNID
-	rv = g_tree->stat(path, &ff);
-	
-	if (rv != 0)
-		return rv;
-	
-	for (const auto& kv : g_volume->attributes()->getattr(ff.file.fileID))
-		insertString(output, kv.first.c_str());
-	
-	if (size >= output.size())
+	return handle_exceptions([&]() -> int {
+		std::vector<std::string> attrs;
+		std::vector<char> output;
+
+		attrs = g_volume->listXattr(path);
+
+		for (const std::string& str : attrs)
+			output.insert(output.end(), str.c_str(), str.c_str() + str.length() + 1);
+
+		if (size < output.size())
+			return -ERANGE;
+
 		memcpy(buffer, &output[0], output.size());
-	
-	return output.size();
+		return output.size();
+	});
 }

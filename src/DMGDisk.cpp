@@ -11,6 +11,7 @@
 #include "AppleDisk.h"
 #include "GPTDisk.h"
 #include "CachedReader.h"
+#include "exceptions.h"
 
 DMGDisk::DMGDisk(std::shared_ptr<Reader> reader)
 	: m_reader(reader), m_zone(4000)
@@ -19,15 +20,15 @@ DMGDisk::DMGDisk(std::shared_ptr<Reader> reader)
 	UDIFResourceFile udif;
 
 	if (offset < 512)
-		throw std::runtime_error("File to small to be a DMG");
+		throw io_error("File to small to be a DMG");
 
 	offset -= 512;
 
 	if (m_reader->read(&udif, sizeof(udif), offset) != sizeof(udif))
-		throw std::runtime_error("Cannot read the KOLY block");
+		throw io_error("Cannot read the KOLY block");
 
 	if (be(udif.fUDIFSignature) != UDIF_SIGNATURE)
-		throw std::runtime_error("Invalid KOLY block signature");
+		throw io_error("Invalid KOLY block signature");
 	
 	loadKoly(udif);
 }
@@ -94,7 +95,7 @@ void DMGDisk::loadKoly(const UDIFResourceFile& koly)
 			pdisk = new GPTDisk(rm1, r1);
 		}
 		else
-			throw std::runtime_error("Unknown partition table type");
+			throw function_not_implemented_error("Unknown partition table type");
 
 		m_partitions = pdisk->partitions();
 
@@ -122,7 +123,7 @@ bool DMGDisk::loadPartitionElements(xmlXPathContextPtr xpathContext, xmlNodeSetP
 			xpathObj = xmlXPathEvalExpression((const xmlChar*) "string(key[text()='Name']/following-sibling::string)", xpathContext);
 
 		if (!xpathObj || !xpathObj->stringval)
-			throw std::runtime_error("Invalid XML data, partition Name key not found");
+			throw io_error("Invalid XML data, partition Name key not found");
 		
 		table = loadBLKXTableForPartition(i);
 		
@@ -139,8 +140,6 @@ bool DMGDisk::loadPartitionElements(xmlXPathContextPtr xpathContext, xmlNodeSetP
 		xmlXPathFreeObject(xpathObj);
 		//delete table;
 	}
-	
-	m_blkxBlocks = nodes->nodeNr;
 	
 	return true;
 }

@@ -1,6 +1,7 @@
 #include "HFSZlibReader.h"
 #include <cstring>
 #include <stdexcept>
+#include "exceptions.h"
 #include "be.h"
 
 // HFS+ compresses data in 64KB blocks
@@ -21,13 +22,13 @@ HFSZlibReader::HFSZlibReader(std::shared_ptr<Reader> parent, uint64_t uncompress
 		std::unique_ptr<uint32_t[]> entries;
 		
 		if (m_reader->read(&numEntries, sizeof(numEntries), 0) != sizeof(numEntries))
-			throw std::runtime_error("Short read of compression map");
+			throw io_error("Short read of compression map");
 		
 		numEntries = le(numEntries);
 		entries.reset(new uint32_t[(numEntries+1) * 2]);
 		
 		if (m_reader->read(entries.get(), sizeof(uint32_t) * 2 * (numEntries+1), sizeof(numEntries)) != sizeof(uint32_t) * 2 * (numEntries+1))
-			throw std::runtime_error("Short read of compression map entries");
+			throw io_error("Short read of compression map entries");
 		
 		for (size_t i = 0; i < numEntries+1; i++)
 			m_offsets.push_back(std::make_pair(le(entries[i*2]), le(entries[i*2+1])));
@@ -126,7 +127,7 @@ int32_t HFSZlibReader::readRun(int runIndex, void* buf, int32_t count, uint64_t 
 		status = inflate(&m_strm, Z_SYNC_FLUSH);
 		
 		if (status < 0)
-			throw std::runtime_error("Inflate error");
+			throw io_error("Inflate error");
 		
 		done += thistime - m_strm.avail_out;
 		m_inputPos += read - m_strm.avail_in;
@@ -162,7 +163,7 @@ int32_t HFSZlibReader::read(void* buf, int32_t count, uint64_t offset)
 		read = readRun(runIndex, static_cast<char*>(buf) + done, thisTime, runOffset);
 		
 		if (read != thisTime)
-			throw std::runtime_error("Short read from readRun");
+			throw io_error("Short read from readRun");
 		
 		done += read;
 	}

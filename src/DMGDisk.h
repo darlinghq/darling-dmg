@@ -28,7 +28,6 @@ private:
 	std::shared_ptr<Reader> m_reader;
 	std::vector<Partition> m_partitions;
 	xmlDocPtr m_kolyXML;
-	int m_blkxBlocks;
 	CacheZone m_zone;
 };
 

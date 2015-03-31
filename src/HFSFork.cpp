@@ -4,6 +4,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <cassert>
+#include "exceptions.h"
 #include "HFSExtentsOverflowBTree.h"
 
 HFSFork::HFSFork(HFSVolume* vol, const HFSPlusForkData& fork, HFSCatalogNodeID cnid, bool resourceFork)
@@ -27,16 +28,16 @@ void HFSFork::loadFromOverflowsFile(uint32_t blocksSoFar)
 	const size_t oldCount = m_extents.size();
 
 	if (!m_cnid)
-		throw std::runtime_error("Cannot search extents file, CNID is kHFSNullID");
+		throw std::logic_error("Cannot search extents file, CNID is kHFSNullID");
 
 //	if (oldCount > 8)
-//		throw std::runtime_error("Loaded extent count > 8, but appropriate extent not found");
+//		throw io_error("Loaded extent count > 8, but appropriate extent not found");
 	if (oldCount < 8)
-		throw std::runtime_error("Loaded extent count < 8, but appropriate extent not found");
+		throw io_error("Loaded extent count < 8, but appropriate extent not found");
 
 	m_volume->m_overflowExtents->findExtentsForFile(m_cnid, m_resourceFork, blocksSoFar, m_extents);
 	if (m_extents.size() == oldCount)
-		throw std::runtime_error("Overflow extents not found for given CNID");
+		throw io_error("Overflow extents not found for given CNID");
 }
 
 int32_t HFSFork::read(void* buf, int32_t count, uint64_t offset)

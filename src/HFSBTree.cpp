@@ -9,6 +9,7 @@
 #include <algorithm>
 #include "HFSBTreeNode.h"
 #include "CacheZone.h"
+#include "exceptions.h"
 
 HFSBTree::HFSBTree(std::shared_ptr<HFSFork> fork, CacheZone* zone, const char* cacheTag)
 : m_fork(fork)
@@ -20,13 +21,13 @@ HFSBTree::HFSBTree(std::shared_ptr<HFSFork> fork, CacheZone* zone, const char* c
 	m_reader.reset(new CachedReader(m_fork, zone, cacheTag));
 	
 	if (m_reader->read(&desc0, sizeof(desc0), 0) != sizeof(desc0))
-		throw std::runtime_error("Failed to read BTNodeDescriptor zero");
+		throw io_error("Failed to read BTNodeDescriptor zero");
 	
 	if (desc0.kind != NodeKind::kBTHeaderNode)
-		throw std::runtime_error("Wrong kind of BTree header");
+		throw io_error("Wrong kind of BTree header");
 	
 	if (m_reader->read(&m_header, sizeof(m_header), sizeof(desc0)) != sizeof(m_header))
-		throw std::runtime_error("Failed to read BTHeaderRec");
+		throw io_error("Failed to read BTHeaderRec");
 	
 	//std::cout << "leaf records: " << be(m_header.leafRecords) << std::endl;
 	//std::cout << "node size: " << be(m_header.nodeSize) << std::endl;

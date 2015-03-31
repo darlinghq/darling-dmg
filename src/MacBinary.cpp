@@ -1,13 +1,14 @@
 #include "MacBinary.h"
 #include "SubReader.h"
 #include "be.h"
+#include "exceptions.h"
 #include <stdexcept>
 
 MacBinary::MacBinary(std::shared_ptr<Reader> reader)
 	: m_reader(reader)
 {
 	if (m_reader->read(&m_header, sizeof(m_header), 0) != sizeof(m_header))
-		throw std::runtime_error("Error reading MacBinary header");
+		throw io_error("Error reading MacBinary header");
 }
 
 Reader* MacBinary::getDataFork()

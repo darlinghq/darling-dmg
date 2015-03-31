@@ -8,6 +8,7 @@
 #include <stdexcept>
 #include <vector>
 #include <iostream>
+#include "exceptions.h"
 
 class DMGDecompressor_Zlib : public DMGDecompressor
 {
@@ -62,7 +63,7 @@ int DMGDecompressor::readSome(char** ptr)
 	int rd = m_reader->read(m_buf, sizeof(m_buf), m_pos);
 	
 	if (rd <= 0)
-		throw std::runtime_error("DMGDecompressor cannot read from stream");
+		throw io_error("DMGDecompressor cannot read from stream");
 	
 	return rd;
 }
@@ -70,7 +71,10 @@ int DMGDecompressor::readSome(char** ptr)
 void DMGDecompressor::processed(int bytes)
 {
 	m_pos += bytes;
+
+#ifdef DEBUG
 	std::cout << "Processed: " << bytes << ", total: " << m_pos << std::endl;
+#endif
 }
 
 DMGDecompressor_Zlib::DMGDecompressor_Zlib(std::shared_ptr<Reader> reader)
@@ -143,7 +147,9 @@ int32_t DMGDecompressor_Bzip2::decompress(void* output, int32_t outputBytes)
 	int inputBytes;
 	int32_t done = 0;
 	
+#ifdef DEBUG
 	std::cout << "bz2: Asked to provide " << outputBytes << " bytes\n";
+#endif
 
 	do
 	{

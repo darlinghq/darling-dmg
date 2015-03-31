@@ -1,5 +1,6 @@
 #include "HFSExtentsOverflowBTree.h"
 #include "be.h"
+#include "exceptions.h"
 #include <stdexcept>
 
 HFSExtentsOverflowBTree::HFSExtentsOverflowBTree(std::shared_ptr<HFSFork> fork, CacheZone* zone)
@@ -35,7 +36,7 @@ void HFSExtentsOverflowBTree::findExtentsForFile(HFSCatalogNodeID cnid, bool res
 			if (first)
 			{
 				if (be(recordKey->startBlock) != startBlock)
-					throw std::runtime_error("Unexpected startBlock value");
+					throw io_error("Unexpected startBlock value");
 				first = false;
 			}
 
