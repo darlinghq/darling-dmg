@@ -44,7 +44,7 @@ int32_t CachedReader::read(void* buf, int32_t count, uint64_t offset)
 		{
 			// Fetch all previous data from lastFetchPos till (offset+done) from backing store
 			const int32_t toRead = done - lastFetchPos;
-			const int32_t pos = offset + lastFetchPos;
+			const uint64_t pos = offset + lastFetchPos;
 			
 			if (toRead > 0)
 			{
@@ -69,7 +69,7 @@ int32_t CachedReader::read(void* buf, int32_t count, uint64_t offset)
 	{
 		// Uncached blocks at the end of the requested range
 		const int32_t toRead = done - lastFetchPos;
-		const int32_t pos = offset + lastFetchPos;
+		const uint64_t pos = offset + lastFetchPos;
 		
 		nonCachedRead(((char*) buf) + lastFetchPos, toRead, pos);
 	}
