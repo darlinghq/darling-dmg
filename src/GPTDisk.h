@@ -17,7 +17,7 @@ public:
 	static bool isGPTDisk(std::shared_ptr<Reader> reader);
 private:
 	void loadPartitions(std::shared_ptr<Reader> table);
-	static std::string makeGUID(const GUID& guid);
+	static std::string makeGUID(const GPT_GUID& guid);
 private:
 	std::shared_ptr<Reader> m_reader;
 	std::vector<Partition> m_partitions;

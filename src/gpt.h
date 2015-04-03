@@ -34,7 +34,7 @@ struct GPTHeader
 	// TODO
 };
 
-struct GUID
+struct GPT_GUID
 {
 	uint32_t data1;
 	uint16_t data2, data3;
@@ -43,8 +43,8 @@ struct GUID
 
 struct GPTPartition
 {
-	GUID typeGUID;
-	GUID partitionGUID;
+	GPT_GUID typeGUID;
+	GPT_GUID partitionGUID;
 	uint64_t firstLBA, lastLBA;
 	uint64_t flags;
 	uint16_t name[36];
