@@ -1,6 +1,7 @@
 #include "HFSZlibReader.h"
 #include <cstring>
 #include <stdexcept>
+#include <algorithm>
 #include "exceptions.h"
 #include "be.h"
 

@@ -15,10 +15,6 @@
 #include "exceptions.h"
 #include "HFSHighLevelVolume.h"
 
-static const char* RESOURCE_FORK_SUFFIX = "#..namedfork#rsrc";
-static const char* XATTR_RESOURCE_FORK = "com.apple.ResourceFork";
-static const char* XATTR_FINDER_INFO = "com.apple.FinderInfo";
-
 std::shared_ptr<Reader> g_fileReader;
 std::unique_ptr<HFSHighLevelVolume> g_volume;
 std::unique_ptr<PartitionedDisk> g_partitions;
