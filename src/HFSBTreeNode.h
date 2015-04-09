@@ -12,12 +12,12 @@ class HFSBTreeNode
 {
 public:
 	HFSBTreeNode()
-	: m_descriptor(nullptr), m_nodeSize(0)
+	: m_descriptor(nullptr), m_nodeSize(0), m_firstRecordOffset(nullptr)
 	{
 	}
 	
 	HFSBTreeNode(const std::vector<uint8_t>& descriptorData, uint16_t nodeSize)
-	: m_descriptorData(descriptorData), m_nodeSize(nodeSize)
+	: m_descriptorData(descriptorData), m_nodeSize(nodeSize), m_firstRecordOffset(nullptr)
 	{
 		initFromBuffer();
 	}
