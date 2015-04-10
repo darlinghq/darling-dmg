@@ -28,6 +28,7 @@ public:
 	std::vector<uint8_t> getXattr(const std::string& path, const std::string& xattrName);
 private:
 	void hfs_nativeToStat(const HFSPlusCatalogFileOrFolder& ff, struct stat* stat, bool resourceFork = false);
+	void hfs_nativeToStat_decmpfs(const HFSPlusCatalogFileOrFolder& ff, struct stat* stat, bool resourceFork = false);
 	decmpfs_disk_header* get_decmpfs(HFSCatalogNodeID cnid, std::vector<uint8_t>& holder);
 private:
 	std::shared_ptr<HFSVolume> m_volume;

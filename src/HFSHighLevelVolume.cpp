@@ -7,6 +7,7 @@
 #include "ResourceFork.h"
 #include "exceptions.h"
 #include "decmpfs.h"
+#include <assert.h>
 
 static const char* RESOURCE_FORK_SUFFIX = "#..namedfork#rsrc";
 static const char* XATTR_RESOURCE_FORK = "com.apple.ResourceFork";
@@ -48,7 +49,7 @@ std::map<std::string, struct stat> HFSHighLevelVolume::listDirectory(const std::
 	for (auto it = contents.begin(); it != contents.end(); it++)
 	{
 		struct stat st;
-		hfs_nativeToStat(it->second, &st, string_endsWith(it->first, RESOURCE_FORK_SUFFIX));
+		hfs_nativeToStat_decmpfs(it->second, &st, string_endsWith(it->first, RESOURCE_FORK_SUFFIX));
 
 		rv[it->first] = st;
 	}
@@ -74,10 +75,19 @@ struct stat HFSHighLevelVolume::stat(const std::string& path)
 	if (rv != 0)
 		throw file_not_found_error(spath);
 
-	hfs_nativeToStat(ff, &stat, resourceFork);
+	hfs_nativeToStat_decmpfs(ff, &stat, resourceFork);
+
+	return stat;
+}
+
+void HFSHighLevelVolume::hfs_nativeToStat_decmpfs(const HFSPlusCatalogFileOrFolder& ff, struct stat* stat, bool resourceFork)
+{
+	assert(stat != nullptr);
+
+	hfs_nativeToStat(ff, stat, resourceFork);
 
 	// Compressed FS support
-	if ((ff.file.permissions.ownerFlags & HFS_PERM_OFLAG_COMPRESSED) && !stat.st_size)
+	if ((ff.file.permissions.ownerFlags & HFS_PERM_OFLAG_COMPRESSED) && !stat->st_size)
 	{
 		decmpfs_disk_header* hdr;
 		std::vector<uint8_t> xattrData;
@@ -85,10 +95,8 @@ struct stat HFSHighLevelVolume::stat(const std::string& path)
 		hdr = get_decmpfs(ff.file.fileID, xattrData);
 
 		if (hdr != nullptr)
-			stat.st_size = hdr->uncompressed_size;
+			stat->st_size = hdr->uncompressed_size;
 	}
-
-	return stat;
 }
 
 std::shared_ptr<Reader> HFSHighLevelVolume::openFile(const std::string& path)
@@ -255,6 +263,7 @@ std::vector<uint8_t> HFSHighLevelVolume::getXattr(const std::string& path, const
 
 void HFSHighLevelVolume::hfs_nativeToStat(const HFSPlusCatalogFileOrFolder& ff, struct stat* stat, bool resourceFork)
 {
+	assert(stat != nullptr);
 	memset(stat, 0, sizeof(*stat));
 
 	stat->st_atime = HFSCatalogBTree::appleToUnixTime(ff.file.accessDate);
