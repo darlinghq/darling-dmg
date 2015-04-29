@@ -14,7 +14,7 @@
 #include "exceptions.h"
 
 DMGDisk::DMGDisk(std::shared_ptr<Reader> reader)
-	: m_reader(reader), m_zone(4000)
+	: m_reader(reader), m_zone(40000)
 {
 	uint64_t offset = m_reader->length();
 	UDIFResourceFile udif;
@@ -148,7 +148,7 @@ bool DMGDisk::parseNameAndType(const std::string& nameAndType, std::string& name
 {
 	// Format: "Apple (Apple_partition_map : 1)"
 	size_t paren = nameAndType.find('(');
-	size_t colon;
+	size_t colon, space;
 
 	if (paren == std::string::npos)
 		return false;
@@ -159,7 +159,12 @@ bool DMGDisk::parseNameAndType(const std::string& nameAndType, std::string& name
 	if (colon == std::string::npos)
 		return false;
 
-	type = nameAndType.substr(paren+1, (colon - paren) - 2);
+	type = nameAndType.substr(paren+1, (colon - paren) - 1);
+	space = type.rfind(' ');
+	
+	if (space != std::string::npos && space == type.length()-1)
+		type.resize(type.length() - 1); // remove space at the end
+	
 	return true;
 }
 

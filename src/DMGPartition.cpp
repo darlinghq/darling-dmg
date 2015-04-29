@@ -51,6 +51,12 @@ void DMGPartition::adviseOptimalBlock(uint64_t offset, uint64_t& blockStart, uin
 	itRun--;
 
 	blockStart = itRun->first * SECTOR_SIZE;
+	
+	// Issue #22: empty areas may be larger than 2**31 (causing bugs in callers).
+	// Moreover, there is no such thing as "optimal block" in zero-filled areas.
+	RunType runType = RunType(be(m_table->runs[itRun->second].type));
+	if (runType == RunType::ZeroFill || runType == RunType::Unknown)
+		Reader::adviseOptimalBlock(offset, blockStart, blockEnd);
 }
 
 int32_t DMGPartition::read(void* buf, int32_t count, uint64_t offset)
@@ -98,7 +104,7 @@ int32_t DMGPartition::readRun(void* buf, int32_t runIndex, uint64_t offsetInSect
 	
 	switch (runType)
 	{
-                case RunType::Unknown:
+		case RunType::Unknown: // My guess is that this value indicates a hole in the file (sparse file)
 		case RunType::ZeroFill:
 			//std::cout << "ZeroFill\n";
 			memset(buf, 0, count);

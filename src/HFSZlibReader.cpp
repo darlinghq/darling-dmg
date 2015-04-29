@@ -49,7 +49,7 @@ HFSZlibReader::~HFSZlibReader()
 
 void HFSZlibReader::adviseOptimalBlock(uint64_t offset, uint64_t& blockStart, uint64_t& blockEnd)
 {
-	blockStart = offset & ~(RUN_LENGTH-1);
+	blockStart = offset & ~uint64_t(RUN_LENGTH-1);
 	blockEnd = std::min(blockStart + RUN_LENGTH, length());
 }
 
