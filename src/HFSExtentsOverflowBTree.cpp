@@ -26,7 +26,7 @@ void HFSExtentsOverflowBTree::findExtentsForFile(HFSCatalogNodeID cnid, bool res
 			HFSPlusExtentKey* recordKey = leaf.getRecordKey<HFSPlusExtentKey>(i);
 			HFSPlusExtentDescriptor* extents;
 
-			if (recordKey->forkType != key.forkType || be(recordKey->fileID) != cnid)
+			if (recordKey->forkType != key.forkType || recordKey->fileID != key.fileID)
 				continue;
 			
 			//std::cout << "Examining extra extents from startBlock " << be(recordKey->startBlock) << std::endl;

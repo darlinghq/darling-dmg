@@ -368,7 +368,7 @@ int HFSCatalogBTree::openFile(const std::string& path, std::shared_ptr<Reader>& 
 		return -EISDIR;
 
 	forkOut.reset(new HFSFork(m_volume, resourceFork ? ff.file.resourceFork : ff.file.dataFork,
-		ff.file.fileID, resourceFork));
+		be(ff.file.fileID), resourceFork));
 
 	return 0;
 }
