@@ -174,9 +174,13 @@ int hfs_readlink(const char* path, char* buf, size_t size)
 	return handle_exceptions([&]() {
 
 		std::shared_ptr<Reader> file;
+		size_t rd;
 
 		file = g_volume->openFile(path);
-		return file->read(buf, size, 0);
+		rd = file->read(buf, size-1, 0);
+		
+		buf[rd] = '\0';
+		return 0;
 	});
 }
 
