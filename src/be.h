@@ -1,7 +1,11 @@
 #ifndef BENDIAN_H
 #define BENDIAN_H
 #include <stdint.h>
+#ifdef __FreeBSD__
+#include <sys/endian.h>
+#else
 #include <endian.h>
+#endif
 
 template <typename T> T be(T value);
 

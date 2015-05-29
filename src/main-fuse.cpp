@@ -2,7 +2,11 @@
 #include <cstring>
 #include <iostream>
 #include <cstdio>
+#ifdef __FreeBSD__
+#include <sys/endian.h>
+#else
 #include <endian.h>
+#endif
 #include <errno.h>
 #include <stdexcept>
 #include <limits>
@@ -72,7 +76,7 @@ void showHelp(const char* argv0)
 {
 	std::cerr << "Usage: " << argv0 << " <file> <mount-point> [fuse args]\n\n";
 	std::cerr << ".DMG files and raw disk images can be mounted.\n";
-	std::cerr << argv0 << " auttomatically selects the first HFS+/HFSX partition.\n";
+	std::cerr << argv0 << " automatically selects the first HFS+/HFSX partition.\n";
 }
 
 
