@@ -2,11 +2,6 @@
 #include "be.h"
 #include <unicode/unistr.h>
 #include <sstream>
-#ifdef __FreeBSD__
-#include <sys/endian.h>
-#else
-#include <endian.h>
-#endif
 #include <cstring>
 #include "unichar.h"
 
