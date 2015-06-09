@@ -34,6 +34,7 @@
 	}
 
 	// windows can be only LE
+	#define __BYTE_ORDER __LITTLE_ENDIAN // this define is required in HFSCatalogBTree.cpp
 
 	#define be16toh(x)	htobe16(x)
 	#define be32toh(x)	htobe16(x)
