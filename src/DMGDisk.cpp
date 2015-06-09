@@ -84,22 +84,25 @@ void DMGDisk::loadKoly(const UDIFResourceFile& koly)
 
 		rm1 = readerForKolyBlock(-1);
 
-		if (AppleDisk::isAppleDisk(rm1))
+		if (rm1)
 		{
-			r1 = readerForKolyBlock(0); // TODO: this is not always partition 0
-			pdisk = new AppleDisk(rm1, r1);
-		}
-		else if (GPTDisk::isGPTDisk(rm1))
-		{
-			r1 = readerForKolyBlock(1);
-			pdisk = new GPTDisk(rm1, r1);
-		}
-		else
-			throw function_not_implemented_error("Unknown partition table type");
+			if (AppleDisk::isAppleDisk(rm1))
+			{
+				r1 = readerForKolyBlock(0); // TODO: this is not always partition 0
+				pdisk = new AppleDisk(rm1, r1);
+			}
+			else if (GPTDisk::isGPTDisk(rm1))
+			{
+				r1 = readerForKolyBlock(1);
+				pdisk = new GPTDisk(rm1, r1);
+			}
+			else
+				throw function_not_implemented_error("Unknown partition table type");
 
-		m_partitions = pdisk->partitions();
+			m_partitions = pdisk->partitions();
 
-		delete pdisk;
+			delete pdisk;
+		}	
 	}
 //#endif
 }
