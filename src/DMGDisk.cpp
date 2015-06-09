@@ -221,6 +221,8 @@ bool DMGDisk::base64Decode(const std::string& input, std::vector<uint8_t>& outpu
 				in_++;
 				continue;
 			}
+			else 
+				break;
 		}
 
 		if (in_ == in_len_const - 1)
