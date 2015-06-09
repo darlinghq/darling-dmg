@@ -102,7 +102,7 @@ void DMGDisk::loadKoly(const UDIFResourceFile& koly)
 			m_partitions = pdisk->partitions();
 
 			delete pdisk;
-		}		
+		}	
 	}
 //#endif
 }
