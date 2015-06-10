@@ -55,7 +55,7 @@ void DMGPartition::adviseOptimalBlock(uint64_t offset, uint64_t& blockStart, uin
 	// Issue #22: empty areas may be larger than 2**31 (causing bugs in callers).
 	// Moreover, there is no such thing as "optimal block" in zero-filled areas.
 	RunType runType = RunType(be(m_table->runs[itRun->second].type));
-	if (runType == RunType::ZeroFill || runType == RunType::Unknown)
+	if (runType == RunType::ZeroFill || runType == RunType::Unknown || runType == RunType::Raw)
 		Reader::adviseOptimalBlock(offset, blockStart, blockEnd);
 }
 
