@@ -36,6 +36,9 @@ HFSZlibReader::HFSZlibReader(std::shared_ptr<Reader> parent, uint64_t uncompress
 	}
 	else
 	{
+		// This branch is only used for zlib data stored within extended attributes.
+		// In this case, the reader here is a MemoryReader with a small amount of data,
+		// thus it is OK to cast the length to uint32_t.
 		m_offsets.push_back(std::pair<uint32_t,uint32_t>(0, m_reader->length()));
 	}
 	
