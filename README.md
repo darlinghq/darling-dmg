@@ -14,6 +14,10 @@ As you can see, the list is recursive. That means darling-dmg, can mount DMG fil
 
 Read only access only.
 
+## Build Requirements
+
+You need the development packages for following libraries: fuse, icu, openssl, zlib, bzip2.
+
 ## Usage
 
     darling-dmg <file-to-mount> <where-to-mount> [FUSE arguments]
