@@ -17,7 +17,7 @@ if (WITH_TESTS)
 	enable_testing()
 	find_package(Boost COMPONENTS unit_test_framework REQUIRED)
 
-	add_definitions(-DBOOST_TEST_DYN_LINK -DDEBUG)
+	add_definitions(-DBOOST_TEST_DYN_LINK ) # -DDEBUG
 
 	set(CacheTest_SRC
 		test/CacheTest.cpp
