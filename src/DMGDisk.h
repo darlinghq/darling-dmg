@@ -27,6 +27,7 @@ private:
 private:
 	std::shared_ptr<Reader> m_reader;
 	std::vector<Partition> m_partitions;
+	UDIFResourceFile m_udif;
 	xmlDocPtr m_kolyXML;
 	CacheZone m_zone;
 };

@@ -17,20 +17,19 @@ DMGDisk::DMGDisk(std::shared_ptr<Reader> reader)
 	: m_reader(reader), m_zone(40000)
 {
 	uint64_t offset = m_reader->length();
-	UDIFResourceFile udif;
 
 	if (offset < 512)
 		throw io_error("File to small to be a DMG");
 
 	offset -= 512;
 
-	if (m_reader->read(&udif, sizeof(udif), offset) != sizeof(udif))
+	if (m_reader->read(&m_udif, sizeof(m_udif), offset) != sizeof(m_udif))
 		throw io_error("Cannot read the KOLY block");
 
-	if (be(udif.fUDIFSignature) != UDIF_SIGNATURE)
+	if (be(m_udif.fUDIFSignature) != UDIF_SIGNATURE)
 		throw io_error("Invalid KOLY block signature");
 	
-	loadKoly(udif);
+	loadKoly(m_udif);
 }
 
 DMGDisk::~DMGDisk()
