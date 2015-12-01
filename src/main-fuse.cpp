@@ -72,9 +72,7 @@ int main(int argc, char** argv)
 
 		std::cerr << "Possible reasons:\n"
 			"1) The file is corrupt.\n"
-			"2) The file is not really a supported disk image, and needs further processing. "
-			"The author has seen files with a .dmg extension, which were actually XAR archives "
-			"containing a DMG.\n"
+			"2) The file is not really a DMG file, although it resembles one.\n"
 			"3) There is a bug in darling-dmg.\n";
 
 		return 1;
