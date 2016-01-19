@@ -32,11 +32,7 @@ if (WITH_TESTS)
 	add_test(NAME CacheTest COMMAND CacheTest)
 endif (WITH_TESTS)
 
-add_executable(darling-dmg
-	#src/main-test-hfs+.cpp
-	#src/main-test-dmg.cpp
-	src/main-fuse.cpp
-	
+add_library(dmg SHARED
 	src/unichar.cpp
 	src/Reader.cpp
 	src/FileReader.cpp
@@ -65,7 +61,23 @@ add_executable(darling-dmg
 
 	src/HFSHighLevelVolume.cpp
 )
+target_link_libraries(dmg -licuuc -lcrypto -lz -lbz2 ${LIBXML2_LIBRARY})
+install(TARGETS dmg DESTINATION lib)
 
-target_link_libraries(darling-dmg -licuuc -lcrypto -lz -lbz2 -lfuse ${LIBXML2_LIBRARY})
+add_executable(darling-dmg
+	src/main-fuse.cpp
+)
+
+target_link_libraries(darling-dmg -lfuse dmg)
 install(TARGETS darling-dmg RUNTIME DESTINATION bin)
+
+if(DARLING) # If this is built as a module of Darling
+
+	add_executable(hdiutil
+		src/main-hdiutil.cpp
+	)
+
+	target_link_libraries(hdiutil -lfuse dmg)
+	install(TARGETS hdiutil DESTINATION libexec/darling/usr/bin)
+endif(DARLING)
 

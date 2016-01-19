@@ -100,7 +100,9 @@ int32_t DMGPartition::readRun(void* buf, int32_t runIndex, uint64_t offsetInSect
 	
 	count = std::min<uint64_t>(count, uint64_t(be(run->sectorCount))*512 - offsetInSector);
 	
+#ifdef DEBUG
 	std::cout << "readRun(): runIndex = " << runIndex << ", offsetInSector = " << offsetInSector << ", count = " << count << std::endl;
+#endif
 	
 	switch (runType)
 	{

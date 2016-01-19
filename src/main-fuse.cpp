@@ -23,7 +23,7 @@ std::shared_ptr<Reader> g_fileReader;
 std::unique_ptr<HFSHighLevelVolume> g_volume;
 std::unique_ptr<PartitionedDisk> g_partitions;
 
-int main(int argc, char** argv)
+int main(int argc, const char** argv)
 {
 	try
 	{
@@ -61,7 +61,11 @@ int main(int argc, char** argv)
 		fuse_opt_add_arg(&args, "-oro");
 		fuse_opt_add_arg(&args, "-s");
 	
-		std::cout << "Everything looks OK, disk mounted\n";
+		std::cerr << "Everything looks OK, disk mounted\n";
+
+#ifdef BEFORE_MOUNT_EXTRA // Darling only
+		BEFORE_MOUNT_EXTRA;
+#endif
 
 		return fuse_main(args.argc, args.argv, &ops, 0);
 	}
@@ -113,7 +117,7 @@ void openDisk(const char* path)
 		{
 			if (parts[i].type == "Apple_HFS" || parts[i].type == "Apple_HFSX")
 			{
-				std::cout << "Using partition #" << i << " of type " << parts[i].type << std::endl;
+				std::cerr << "Using partition #" << i << " of type " << parts[i].type << std::endl;
 				partIndex = i;
 				break;
 			}
