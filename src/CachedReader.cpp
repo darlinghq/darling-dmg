@@ -139,11 +139,13 @@ void CachedReader::nonCachedRead(void* buf, int32_t count, uint64_t offset)
 		if (readPos > blockStart)
 			optimalOffset = readPos - blockStart;
 		outputOffset = readPos - offset;
-		toCopy = std::min<uint32_t>(offset+count - readPos, thistime);
+		toCopy = std::min<uint32_t>(offset+count - readPos, thistime - optimalOffset);
 
 #ifdef DEBUG
 		std::cout << "Copying " << toCopy << " bytes into output buffer at offset " << outputOffset << " from internal offset " << optimalOffset << std::endl;
 #endif
+		// if (toCopy+optimalOffset > thistime)
+		// 	throw std::logic_error("Internal error");
 		std::copy_n(&optimalBlockBuffer[optimalOffset], toCopy, reinterpret_cast<uint8_t*>(buf) + outputOffset);
 
 		readPos += toCopy;
