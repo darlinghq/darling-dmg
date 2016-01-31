@@ -219,6 +219,8 @@ int hfs_open(const char* path, struct fuse_file_info* info)
 int hfs_read(const char* path, char* buf, size_t bytes, off_t offset, struct fuse_file_info* info)
 {
 	return handle_exceptions([&]() {
+		if (!info->fh)
+			return -EIO;
 
 		std::shared_ptr<Reader>& file = *(std::shared_ptr<Reader>*) info->fh;
 		return file->read(buf, bytes, offset);
