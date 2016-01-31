@@ -24,7 +24,10 @@ struct HFSResourceHeader
 
 struct HFSResourceMapHeader
 {
-	uint64_t reserved1[2];
+	uint32_t dataOffset;
+	uint32_t mapOffset;
+	uint32_t dataLength;
+	uint32_t mapLength;
 	uint32_t reserved2;
 	uint16_t reserved3;
 	uint16_t attributes;
