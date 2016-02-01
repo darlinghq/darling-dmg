@@ -146,14 +146,16 @@ int HFSCatalogBTree::listDirectory(const std::string& path, std::map<std::string
 	for (auto it = beContents.begin(); it != beContents.end(); it++)
 	{
 		HFSPlusCatalogFileOrFolder native;
+		std::string filename = it->first;
 
 		memcpy(&native, it->second, sizeof(native));
 
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 		fixEndian(native);
 #endif
+		replaceChars(filename, '/', ':'); // Issue #36: / and : have swapped meaning in HFS+
 
-		contents[it->first] = native;
+		contents[filename] = native;
 	}
 
 	return 0;
@@ -187,10 +189,12 @@ int HFSCatalogBTree::stat(std::string path, HFSPlusCatalogFileOrFolder* s, bool 
 
 	for (size_t i = 0; i < elems.size(); i++)
 	{
-		const std::string& elem = elems[i];
+		std::string elem = elems[i];
 		//UnicodeString ustr = UnicodeString::fromUTF8(elem);
 		HFSPlusCatalogKey desiredKey;
 		HFSCatalogNodeID parentID = last ? be(last->folder.folderID) : kHFSRootParentID;
+
+		replaceChars(elem, ':', '/'); // Issue #36: / and : have swapped meaning in HFS+
 
 		//if (ustr.length() > 255) // FIXME: there is a UCS-2 vs UTF-16 issue here!
 		//	return -ENAMETOOLONG;
@@ -433,3 +437,14 @@ void HFSCatalogBTree::dumpTree(int nodeIndex, int depth) const
 			
 	}
 }
+void HFSCatalogBTree::replaceChars(std::string& str, char oldChar, char newChar)
+{
+	size_t pos = 0;
+
+	while ((pos = str.find(oldChar, pos)) != std::string::npos)
+	{
+		str[pos] = newChar;
+		pos++;
+	}
+}
+

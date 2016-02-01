@@ -37,6 +37,7 @@ private:
 	static int caseSensitiveComparator(const Key* indexKey, const Key* desiredKey);
 	static int idOnlyComparator(const Key* indexKey, const Key* desiredKey);
 	static void fixEndian(HFSPlusCatalogFileOrFolder& ff);
+	static void replaceChars(std::string& str, char oldChar, char newChar);
 	
 	void dumpTree(int nodeIndex, int depth) const;
 private:
