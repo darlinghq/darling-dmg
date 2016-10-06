@@ -68,6 +68,10 @@ add_executable(darling-dmg
 	src/main-fuse.cpp
 )
 
+SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
+SET(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE) 
+SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+
 target_link_libraries(darling-dmg -lfuse dmg)
 install(TARGETS darling-dmg RUNTIME DESTINATION bin)
 
