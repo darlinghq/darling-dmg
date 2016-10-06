@@ -86,7 +86,7 @@ static int doAttach(int argc, char** argv)
 	mount = prefix;
 	mount += "Volumes/";
 
-	if (argv[2] == '/')
+	if (argv[2][0] == '/')
 		dmg = prefix;
 	dmg += argv[2];
 
