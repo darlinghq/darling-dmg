@@ -3,6 +3,8 @@
 #include <string>
 #include <errno.h>
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <cstdlib>
 
 static void printMount();
@@ -132,16 +134,41 @@ static void printMount()
 
 static int doDetach(int argc, char** argv)
 {
+	pid_t pid;
+	int status;
+
 	if (argc != 3)
 		printHelp();
 
-	setenv("PATH",
-		"/Volumes/SystemRoot/bin:"
-		"/Volumes/SystemRoot/usr/bin",
-		1);
+	pid = fork();
+	if (pid < 0)
+	{
+		std::cerr << "Failed to fork: " << strerror(errno) << "\n";
+		return 1;
+	}
 
-	execlp("fusermount", "fusermount", "-u", argv[2], (char*) nullptr);
-	std::cerr << "Failed to execute fusermount!\n";
+	if (pid == 0)
+	{
+		setenv("PATH",
+			"/Volumes/SystemRoot/bin:"
+			"/Volumes/SystemRoot/usr/bin",
+			1);
 
-	return 1;
+		execlp("fusermount", "fusermount", "-u", argv[2], (char*) nullptr);
+		std::cerr << "Failed to execute fusermount!\n";
+
+		return 1;
+	}
+
+	wait(&status);
+	if (!WIFEXITED(status) || WEXITSTATUS(status) != 0)
+		return 1;
+
+	if (rmdir(argv[2]) != 0)
+	{
+		std::cerr << "Failed to rmdir " << argv[2] << ": " << strerror(errno) << "\n";
+		return 1;
+	}
+
+	return 0;
 }
