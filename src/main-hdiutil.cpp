@@ -15,7 +15,6 @@ static void printMount();
 static void printHelp();
 static int doAttach(int argc, char** argv);
 static int doDetach(int argc, char** argv);
-static std::string getPrefix();
 
 int main(int argc, char** argv)
 {
@@ -43,31 +42,6 @@ static void printHelp()
 	exit(1);
 }
 
-static std::string getPrefix()
-{
-	std::string prefix;
-
-	if (const char* p = getenv("DPREFIX"))
-	{
-		prefix = p;
-
-		if (!prefix.empty() && prefix[prefix.length()-1] != '/')
-			prefix += '/';
-	}
-	
-	if (prefix.empty())
-	{
-		const char* home = getenv("HOME");
-		if (home == nullptr)
-			home = "/";
-
-		prefix = home;
-		prefix += ".darling/";
-	}
-
-	return prefix;
-}
-
 static std::string g_mountDir;
 
 static int doAttach(int argc, char** argv)
@@ -75,22 +49,13 @@ static int doAttach(int argc, char** argv)
 	if (argc != 3)
 		printHelp();
 
-	std::string prefix, mount, dmg;
 	std::string mountname;
 	const char *p, *p2;
 	int fd;
 	char output[] = "/tmp/hdiutilXXXXXX";
 	const char* args[4];
 
-	prefix = getPrefix();
-	mount = prefix;
-	mount += "Volumes/";
-
-	if (argv[2][0] == '/')
-		dmg = prefix;
-	dmg += argv[2];
-
-	if (access(dmg.c_str(), R_OK) != 0)
+	if (access(argv[2], R_OK) != 0)
 	{
 		std::cerr << "Cannot access " << argv[2] << std::endl;
 		return 1;
@@ -107,13 +72,11 @@ static int doAttach(int argc, char** argv)
 		p2 = argv[2] + strlen(argv[2]);
 
 	mountname = std::string(p, p2-p);
-	mount += mountname;
-	g_mountDir = "/Volumes/";
-	g_mountDir += mountname;
+	g_mountDir = "/Volumes/" + mountname;
 
-	if (mkdir(mount.c_str(), 0777) == -1 && errno != EEXIST)
+	if (mkdir(g_mountDir.c_str(), 0777) == -1 && errno != EEXIST)
 	{
-		std::cerr << "Cannot mkdir " << mount << std::endl;
+		std::cerr << "Cannot mkdir " << g_mountDir << std::endl;
 		return 1;
 	}
 
@@ -126,9 +89,14 @@ static int doAttach(int argc, char** argv)
 	dup2(fd, 2);
 
 	args[0] = "darling-dmg";
-	args[1] = dmg.c_str();
-	args[2] = mount.c_str();
+	args[1] = argv[2];
+	args[2] = g_mountDir.c_str();
 	args[3] = nullptr;
+
+	setenv("PATH",
+		"/Volumes/SystemRoot/bin:"
+		"/Volumes/SystemRoot/usr/bin",
+		1);
 
 	if (main_fuse(3, args) != 0)
 	{
@@ -167,14 +135,13 @@ static int doDetach(int argc, char** argv)
 	if (argc != 3)
 		printHelp();
 
-	std::string path;
+	setenv("PATH",
+		"/Volumes/SystemRoot/bin:"
+		"/Volumes/SystemRoot/usr/bin",
+		1);
 
-	path = getPrefix();
-	path += argv[2];
-
-	execlp("fusermount", "fusermount", "-u", path.c_str(), (char*) nullptr);
+	execlp("fusermount", "fusermount", "-u", argv[2], (char*) nullptr);
 	std::cerr << "Failed to execute fusermount!\n";
 
 	return 1;
 }
-
