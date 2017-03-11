@@ -3,9 +3,10 @@
 #include <string>
 #include <errno.h>
 #include <unistd.h>
-#include <sys/types.h>
-#include <sys/wait.h>
 #include <cstdlib>
+#include <elfcalls.h>
+#include <sys/wait.h>
+#include <spawn.h>
 
 static void printMount();
 
@@ -17,6 +18,7 @@ static void printMount();
 static void printHelp();
 static int doAttach(int argc, char** argv);
 static int doDetach(int argc, char** argv);
+static void addFusermountIntoPath();
 
 int main(int argc, char** argv)
 {
@@ -51,13 +53,18 @@ static int doAttach(int argc, char** argv)
 	if (argc != 3)
 		printHelp();
 
+	std::string prefix, mount, dmg;
 	std::string mountname;
 	const char *p, *p2;
 	int fd;
 	char output[] = "/tmp/hdiutilXXXXXX";
 	const char* args[4];
 
-	if (access(argv[2], R_OK) != 0)
+	mount = "/Volumes/";
+
+	dmg = argv[2];
+
+	if (access(dmg.c_str(), R_OK) != 0)
 	{
 		std::cerr << "Cannot access " << argv[2] << std::endl;
 		return 1;
@@ -74,11 +81,13 @@ static int doAttach(int argc, char** argv)
 		p2 = argv[2] + strlen(argv[2]);
 
 	mountname = std::string(p, p2-p);
-	g_mountDir = "/Volumes/" + mountname;
+	mount += mountname;
+	g_mountDir = "/Volumes/";
+	g_mountDir += mountname;
 
-	if (mkdir(g_mountDir.c_str(), 0777) == -1 && errno != EEXIST)
+	if (mkdir(mount.c_str(), 0777) == -1 && errno != EEXIST)
 	{
-		std::cerr << "Cannot mkdir " << g_mountDir << std::endl;
+		std::cerr << "Cannot mkdir " << mount << std::endl;
 		return 1;
 	}
 
@@ -91,14 +100,11 @@ static int doAttach(int argc, char** argv)
 	dup2(fd, 2);
 
 	args[0] = "darling-dmg";
-	args[1] = argv[2];
-	args[2] = g_mountDir.c_str();
+	args[1] = dmg.c_str();
+	args[2] = mount.c_str();
 	args[3] = nullptr;
 
-	setenv("PATH",
-		"/Volumes/SystemRoot/bin:"
-		"/Volumes/SystemRoot/usr/bin",
-		1);
+	addFusermountIntoPath();
 
 	if (main_fuse(3, args) != 0)
 	{
@@ -132,43 +138,51 @@ static void printMount()
 	std::cout << g_mountDir << std::endl;
 }
 
+extern "C"
+{
+	extern const struct elf_calls* _elfcalls;
+	extern char **environ;
+}
+
+
 static int doDetach(int argc, char** argv)
 {
 	pid_t pid;
-	int status;
+	int (*elf_posix_spawn)(pid_t* pid, const char* path, const posix_spawn_file_actions_t *file_actions, const posix_spawnattr_t *attrp, char *const argv[], char *const envp[]);
+	const char* pargv[] = { "fusermount", "-u", argv[2], nullptr };
 
 	if (argc != 3)
 		printHelp();
 
-	pid = fork();
-	if (pid < 0)
+	*((void**)(&elf_posix_spawn)) = _elfcalls->dlsym_fatal(nullptr, "posix_spawn");
+	if (elf_posix_spawn(&pid, "/Volumes/SystemRoot/usr/bin/fusermount", nullptr, nullptr, (char* const*) pargv, environ) != 0)
 	{
-		std::cerr << "Failed to fork: " << strerror(errno) << "\n";
-		return 1;
-	}
-
-	if (pid == 0)
-	{
-		setenv("PATH",
-			"/Volumes/SystemRoot/bin:"
-			"/Volumes/SystemRoot/usr/bin",
-			1);
-
-		execlp("fusermount", "fusermount", "-u", argv[2], (char*) nullptr);
 		std::cerr << "Failed to execute fusermount!\n";
-
 		return 1;
 	}
-
-	wait(&status);
-	if (!WIFEXITED(status) || WEXITSTATUS(status) != 0)
-		return 1;
-
-	if (rmdir(argv[2]) != 0)
+	else
 	{
-		std::cerr << "Failed to rmdir " << argv[2] << ": " << strerror(errno) << "\n";
-		return 1;
-	}
+		int status;
+		waitpid(pid, &status, 0);
+		rmdir(argv[2]);
 
-	return 0;
+		return 0;
+	}
 }
+
+void addFusermountIntoPath()
+{
+	std::string path = getenv("PATH");
+	int (*elf_setenv)(const char *name, const char *value, int overwrite);
+
+	path += ":/Volumes/SystemRoot/usr/bin";
+
+	// Calling setenv doesn't change current process' environment variables,
+	// it only modifies the local copy maintained by libc. This local copy
+	// is then passed by libc to execve().
+	// Since the execution of 'fusermount' happens in libfuse.so, we need
+	// to add it into the environment on the ELF side.
+	*((void**)(&elf_setenv)) = _elfcalls->dlsym_fatal(nullptr, "setenv");
+	elf_setenv("PATH", path.c_str(), true);
+}
+

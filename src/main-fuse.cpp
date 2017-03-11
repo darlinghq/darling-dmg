@@ -2,11 +2,7 @@
 #include <cstring>
 #include <iostream>
 #include <cstdio>
-#ifdef __FreeBSD__
-#include <sys/endian.h>
-#else
-#include <endian.h>
-#endif
+#include "be.h"
 #include <errno.h>
 #include <stdexcept>
 #include <limits>
@@ -18,6 +14,9 @@
 #include "CachedReader.h"
 #include "exceptions.h"
 #include "HFSHighLevelVolume.h"
+#ifdef DARLING
+#	include "stat_xlate.h"
+#endif
 
 std::shared_ptr<Reader> g_fileReader;
 std::unique_ptr<HFSHighLevelVolume> g_volume;
@@ -177,7 +176,12 @@ int hfs_getattr(const char* path, struct stat* stat)
 	std::cerr << "hfs_getattr(" << path << ")\n";
 
 	return handle_exceptions([&]() {
+#ifndef DARLING
 		*stat = g_volume->stat(path);
+#else
+		struct stat st = g_volume->stat(path);
+		bsd_stat_to_linux_stat(&st, reinterpret_cast<linux_stat*>(stat));
+#endif
 		return 0;
 	});
 }
