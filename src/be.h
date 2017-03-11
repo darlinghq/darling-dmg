@@ -3,6 +3,42 @@
 #include <stdint.h>
 #ifdef __FreeBSD__
 #include <sys/endian.h>
+#elif defined(__APPLE__)
+#include <libkern/OSByteOrder.h>
+#include <TargetConditionals.h>
+
+	#if TARGET_RT_LITTLE_ENDIAN
+	#define __BYTE_ORDER __LITTLE_ENDIAN
+
+		#define be16toh(x) OSSwapInt16(x)
+		#define be32toh(x) OSSwapInt32(x)
+		#define be64toh(x) OSSwapInt64(x)
+
+		#define htobe16(x) OSSwapInt16(x)
+		#define htobe32(x) OSSwapInt32(x)
+		#define htobe64(x) OSSwapInt64(x)
+
+		#define le16toh(x) (x)
+		#define le32toh(x) (x)
+		#define le64toh(x) (x)
+
+	#else
+	#define __BYTE_ORDER __BIG_ENDIAN
+
+		#define le16toh(x) OSSwapInt16(x)
+		#define le32toh(x) OSSwapInt32(x)
+		#define le64toh(x) OSSwapInt64(x)
+
+		#define htobe16(x) (x)
+		#define htobe32(x) (x)
+		#define htobe64(x) (x)
+
+		#define be16toh(x) (x)
+		#define be32toh(x) (x)
+		#define be64toh(x) (x)
+
+	#endif
+
 #elif defined(_WIN32)
 	static uint16_t htobe16(uint16_t x) {
 		union { uint16_t u16; uint8_t v[2]; } ret;

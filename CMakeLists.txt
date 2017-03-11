@@ -2,6 +2,41 @@ project(darling-dmg)
 
 cmake_minimum_required(VERSION 2.8)
 
+set(dmg_sources
+	src/unichar.cpp
+	src/Reader.cpp
+	src/FileReader.cpp
+	src/HFSVolume.cpp
+	src/AppleDisk.cpp
+	src/SubReader.cpp
+	src/HFSBTree.cpp
+	src/HFSFork.cpp
+	src/HFSCatalogBTree.cpp
+	src/HFSExtentsOverflowBTree.cpp
+	src/HFSAttributeBTree.cpp
+
+	src/DMGDisk.cpp
+	src/DMGPartition.cpp
+	src/DMGDecompressor.cpp
+	src/adc.cpp
+	src/HFSZlibReader.cpp
+	src/MemoryReader.cpp
+
+	src/GPTDisk.cpp
+	
+	src/MacBinary.cpp
+	src/ResourceFork.cpp
+	src/CacheZone.cpp
+	src/CachedReader.cpp
+
+	src/HFSHighLevelVolume.cpp
+)
+
+
+# This part of CMakeLists.txt is for when building darling-dmg
+# as a standalone FUSE module outside of Darling.
+if (NOT DARLING)
+
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH}
 	"${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/")
 
@@ -75,13 +110,39 @@ SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 target_link_libraries(darling-dmg -lfuse dmg)
 install(TARGETS darling-dmg RUNTIME DESTINATION bin)
 
-if(DARLING) # If this is built as a module of Darling
+# This is used in Darling build.
+else (NOT DARLING)
+	include(wrap_elf)
+	include(darling_exe)
+	include(FindPkgConfig)
 
-	add_executable(hdiutil
+	add_definitions(-D_FILE_OFFSET_BITS=64)
+
+	pkg_check_modules(FUSE REQUIRED fuse)
+
+	include_directories(
+		${FUSE_INCLUDE_DIRS}
+		${CMAKE_SOURCE_DIR}/src/external/libcxx/include
+		${CMAKE_SOURCE_DIR}/src/libiconv/include
+		${CMAKE_SOURCE_DIR}/src/libc/include/FreeBSD
+		${CMAKE_SOURCE_DIR}/src/external/icu/icuSources/common
+		${CMAKE_SOURCE_DIR}/src/external/libxml2/include
+		${CMAKE_BINARY_DIR}/src/external/libxml2/include
+		${CMAKE_SOURCE_DIR}/src/external/openssl/src/include
+		${CMAKE_SOURCE_DIR}/src/external/zlib
+		${CMAKE_SOURCE_DIR}/src/external/bzip2
+	)
+
+	SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -nostdinc")
+
+	wrap_elf(fuse libfuse.so)
+
+	add_darling_executable(hdiutil
+		${dmg_sources}
 		src/main-hdiutil.cpp
 	)
 
-	target_link_libraries(hdiutil -lfuse dmg)
+	target_link_libraries(hdiutil fuse icucore z bz2 crypto098 xml2 iconv)
 	install(TARGETS hdiutil DESTINATION libexec/darling/usr/bin)
-endif(DARLING)
 
+endif (NOT DARLING)

@@ -4,6 +4,9 @@
 #include <errno.h>
 #include <unistd.h>
 #include <cstdlib>
+#include <elfcalls.h>
+#include <sys/wait.h>
+#include <spawn.h>
 
 static void printMount();
 
@@ -15,7 +18,7 @@ static void printMount();
 static void printHelp();
 static int doAttach(int argc, char** argv);
 static int doDetach(int argc, char** argv);
-static std::string getPrefix();
+static void addFusermountIntoPath();
 
 int main(int argc, char** argv)
 {
@@ -43,31 +46,6 @@ static void printHelp()
 	exit(1);
 }
 
-static std::string getPrefix()
-{
-	std::string prefix;
-
-	if (const char* p = getenv("DPREFIX"))
-	{
-		prefix = p;
-
-		if (!prefix.empty() && prefix[prefix.length()-1] != '/')
-			prefix += '/';
-	}
-	
-	if (prefix.empty())
-	{
-		const char* home = getenv("HOME");
-		if (home == nullptr)
-			home = "/";
-
-		prefix = home;
-		prefix += ".darling/";
-	}
-
-	return prefix;
-}
-
 static std::string g_mountDir;
 
 static int doAttach(int argc, char** argv)
@@ -82,13 +60,9 @@ static int doAttach(int argc, char** argv)
 	char output[] = "/tmp/hdiutilXXXXXX";
 	const char* args[4];
 
-	prefix = getPrefix();
-	mount = prefix;
-	mount += "Volumes/";
+	mount = "/Volumes/";
 
-	if (argv[2][0] == '/')
-		dmg = prefix;
-	dmg += argv[2];
+	dmg = argv[2];
 
 	if (access(dmg.c_str(), R_OK) != 0)
 	{
@@ -130,6 +104,8 @@ static int doAttach(int argc, char** argv)
 	args[2] = mount.c_str();
 	args[3] = nullptr;
 
+	addFusermountIntoPath();
+
 	if (main_fuse(3, args) != 0)
 	{
 		char buf[512];
@@ -162,19 +138,51 @@ static void printMount()
 	std::cout << g_mountDir << std::endl;
 }
 
+extern "C"
+{
+	extern const struct elf_calls* _elfcalls;
+	extern char **environ;
+}
+
+
 static int doDetach(int argc, char** argv)
 {
+	pid_t pid;
+	int (*elf_posix_spawn)(pid_t* pid, const char* path, const posix_spawn_file_actions_t *file_actions, const posix_spawnattr_t *attrp, char *const argv[], char *const envp[]);
+	const char* pargv[] = { "fusermount", "-u", argv[2], nullptr };
+
 	if (argc != 3)
 		printHelp();
 
-	std::string path;
+	*((void**)(&elf_posix_spawn)) = _elfcalls->dlsym_fatal(nullptr, "posix_spawn");
+	if (elf_posix_spawn(&pid, "/Volumes/SystemRoot/usr/bin/fusermount", nullptr, nullptr, (char* const*) pargv, environ) != 0)
+	{
+		std::cerr << "Failed to execute fusermount!\n";
+		return 1;
+	}
+	else
+	{
+		int status;
+		waitpid(pid, &status, 0);
+		rmdir(argv[2]);
 
-	path = getPrefix();
-	path += argv[2];
+		return 0;
+	}
+}
 
-	execlp("fusermount", "fusermount", "-u", path.c_str(), (char*) nullptr);
-	std::cerr << "Failed to execute fusermount!\n";
+void addFusermountIntoPath()
+{
+	std::string path = getenv("PATH");
+	int (*elf_setenv)(const char *name, const char *value, int overwrite);
 
-	return 1;
+	path += ":/Volumes/SystemRoot/usr/bin";
+
+	// Calling setenv doesn't change current process' environment variables,
+	// it only modifies the local copy maintained by libc. This local copy
+	// is then passed by libc to execve().
+	// Since the execution of 'fusermount' happens in libfuse.so, we need
+	// to add it into the environment on the ELF side.
+	*((void**)(&elf_setenv)) = _elfcalls->dlsym_fatal(nullptr, "setenv");
+	elf_setenv("PATH", path.c_str(), true);
 }
 
