@@ -120,9 +120,9 @@ else (NOT DARLING)
 
 	pkg_check_modules(FUSE REQUIRED fuse)
 
+	include_directories(BEFORE ${CMAKE_SOURCE_DIR}/src/external/libcxx/include)
 	include_directories(
 		${FUSE_INCLUDE_DIRS}
-		${CMAKE_SOURCE_DIR}/src/external/libcxx/include
 		${CMAKE_SOURCE_DIR}/src/libiconv/include
 		${CMAKE_SOURCE_DIR}/src/libc/include/FreeBSD
 		${CMAKE_SOURCE_DIR}/src/external/icu/icuSources/common
