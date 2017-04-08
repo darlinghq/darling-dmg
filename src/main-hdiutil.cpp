@@ -154,8 +154,10 @@ static int doDetach(int argc, char** argv)
 	if (argc != 3)
 		printHelp();
 
+	addFusermountIntoPath();
+
 	*((void**)(&elf_posix_spawn)) = _elfcalls->dlsym_fatal(nullptr, "posix_spawn");
-	if (elf_posix_spawn(&pid, "/Volumes/SystemRoot/usr/bin/fusermount", nullptr, nullptr, (char* const*) pargv, environ) != 0)
+	if (elf_posix_spawn(&pid, "fusermount", nullptr, nullptr, (char* const*) pargv, environ) != 0)
 	{
 		std::cerr << "Failed to execute fusermount!\n";
 		return 1;
@@ -175,7 +177,8 @@ void addFusermountIntoPath()
 	std::string path = getenv("PATH");
 	int (*elf_setenv)(const char *name, const char *value, int overwrite);
 
-	path += ":/Volumes/SystemRoot/usr/bin";
+	path += ":/Volumes/SystemRoot/bin"
+		":/Volumes/SystemRoot/usr/bin";
 
 	// Calling setenv doesn't change current process' environment variables,
 	// it only modifies the local copy maintained by libc. This local copy
