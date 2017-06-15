@@ -148,7 +148,7 @@ extern "C"
 static int doDetach(int argc, char** argv)
 {
 	pid_t pid;
-	int (*elf_posix_spawn)(pid_t* pid, const char* path, const posix_spawn_file_actions_t *file_actions, const posix_spawnattr_t *attrp, char *const argv[], char *const envp[]);
+	int (*elf_posix_spawnp)(pid_t* pid, const char* path, const posix_spawn_file_actions_t *file_actions, const posix_spawnattr_t *attrp, char *const argv[], char *const envp[]);
 	const char* pargv[] = { "fusermount", "-u", argv[2], nullptr };
 
 	if (argc != 3)
@@ -156,8 +156,8 @@ static int doDetach(int argc, char** argv)
 
 	addFusermountIntoPath();
 
-	*((void**)(&elf_posix_spawn)) = _elfcalls->dlsym_fatal(nullptr, "posix_spawn");
-	if (elf_posix_spawn(&pid, "fusermount", nullptr, nullptr, (char* const*) pargv, environ) != 0)
+	*((void**)(&elf_posix_spawnp)) = _elfcalls->dlsym_fatal(nullptr, "posix_spawnp");
+	if (elf_posix_spawnp(&pid, "fusermount", nullptr, nullptr, (char* const*) pargv, environ) != 0)
 	{
 		std::cerr << "Failed to execute fusermount!\n";
 		return 1;
