@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <stdexcept>
 #include <limits>
+#include <functional>
 #include "HFSVolume.h"
 #include "AppleDisk.h"
 #include "GPTDisk.h"
