@@ -11,11 +11,12 @@
 static void printMount();
 
 #define main main_fuse
-#define BEFORE_MOUNT_EXTRA printMount()
+#define BEFORE_MOUNT_EXTRA printMount(); daemon(false, false)
 #include "main-fuse.cpp"
 #undef main
 
 static void printHelp();
+static void doFork(void);
 static int doAttach(int argc, char** argv);
 static int doDetach(int argc, char** argv);
 static void addFusermountIntoPath();
@@ -58,7 +59,7 @@ static int doAttach(int argc, char** argv)
 	const char *p, *p2;
 	int fd;
 	char output[] = "/tmp/hdiutilXXXXXX";
-	const char* args[4];
+	const char* args[5];
 
 	mount = "/Volumes/";
 
@@ -102,11 +103,12 @@ static int doAttach(int argc, char** argv)
 	args[0] = "darling-dmg";
 	args[1] = dmg.c_str();
 	args[2] = mount.c_str();
-	args[3] = nullptr;
+	args[3] = "-f"; // Fork has to be done by Darling code, otherwise the LKM will not talk to us any more
+	args[4] = nullptr;
 
 	addFusermountIntoPath();
 
-	if (main_fuse(3, args) != 0)
+	if (main_fuse(4, args) != 0)
 	{
 		char buf[512];
 		int rd;
@@ -188,4 +190,3 @@ void addFusermountIntoPath()
 	*((void**)(&elf_setenv)) = _elfcalls->dlsym_fatal(nullptr, "setenv");
 	elf_setenv("PATH", path.c_str(), true);
 }
-
