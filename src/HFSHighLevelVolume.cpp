@@ -193,8 +193,11 @@ std::vector<std::string> HFSHighLevelVolume::listXattr(const std::string& path)
 	if (err != 0)
 		throw file_not_found_error(path);
 
-	for (const auto& kv : m_volume->attributes()->getattr(ff.file.fileID))
-		output.push_back(kv.first);
+	if (m_volume->attributes())
+	{
+		for (const auto& kv : m_volume->attributes()->getattr(ff.file.fileID))
+			output.push_back(kv.first);
+	}
 
 	return output;
 }
@@ -254,6 +257,8 @@ std::vector<uint8_t> HFSHighLevelVolume::getXattr(const std::string& path, const
 		if (rv != 0)
 			throw file_not_found_error(spath);
 
+		if (!m_volume->attributes())
+			throw no_data_error();
 		if (!m_volume->attributes()->getattr(ff.file.fileID, name, output))
 			throw no_data_error();
 	}
