@@ -3,7 +3,7 @@
 #include <stdexcept>
 #include <unicode/unistr.h>
 #include "unichar.h"
-
+using icu::UnicodeString;
 HFSAttributeBTree::HFSAttributeBTree(std::shared_ptr<HFSFork> fork, CacheZone* zone)
 : HFSBTree(fork, zone, "Attribute")
 {

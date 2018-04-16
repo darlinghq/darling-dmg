@@ -4,7 +4,7 @@
 #include <sstream>
 #include <cstring>
 #include "unichar.h"
-
+using icu::UnicodeString;
 static const int MAX_SYMLINKS = 50;
 
 extern UConverter *g_utf16be;
