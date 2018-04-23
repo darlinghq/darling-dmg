@@ -5,7 +5,7 @@
 #include <unicode/errorcode.h>
 #include <cassert>
 #include <iostream>
-
+using icu::UnicodeString;
 UConverter *g_utf16be;
 
 static void InitConverter() __attribute__((constructor));
