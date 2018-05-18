@@ -10,7 +10,12 @@
 class DMGDisk : public PartitionedDisk
 {
 public:
+#ifdef COMPILE_WITH_DECRYPTION_SUPPORT
+	DMGDisk(std::shared_ptr<Reader>reader, const std::string &password);
+#else
 	DMGDisk(std::shared_ptr<Reader>reader);
+#endif
+
 	~DMGDisk();
 
 	virtual const std::vector<Partition>& partitions() const override { return m_partitions; }

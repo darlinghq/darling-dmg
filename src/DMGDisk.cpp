@@ -14,9 +14,31 @@
 #include "SubReader.h"
 #include "exceptions.h"
 
-DMGDisk::DMGDisk(std::shared_ptr<Reader> reader)
+#ifdef COMPILE_WITH_DECRYPTION_SUPPORT
+	#include "decrypt/EncryptedReader.h"
+#endif
+
+#ifdef COMPILE_WITH_DECRYPTION_SUPPORT
+DMGDisk::DMGDisk(std::shared_ptr<Reader>reader, const std::string &password)
+#else
+DMGDisk::DMGDisk(std::shared_ptr<Reader>reader)
+#endif
 	: m_reader(reader), m_zone(40000)
 {
+#ifdef COMPILE_WITH_DECRYPTION_SUPPORT
+	if (EncryptedReader::isEncryptedDMG(reader))
+	{
+		auto encReader = std::make_shared<EncryptedReader>(m_reader);
+
+		if (encReader && encReader->setupEncryptionV2(password))
+			m_reader = encReader;
+		else
+		{
+			throw std::runtime_error("Invalid password specified");
+		}
+	}
+#endif
+
 	uint64_t offset = m_reader->length();
 
 	if (offset < 512)
@@ -40,6 +62,11 @@ DMGDisk::~DMGDisk()
 
 bool DMGDisk::isDMG(std::shared_ptr<Reader> reader)
 {
+#ifdef COMPILE_WITH_DECRYPTION_SUPPORT
+	if (EncryptedReader::isEncryptedDMG(reader))
+		return true;
+#endif
+		
 	uint64_t offset = reader->length() - 512;
 	decltype(UDIFResourceFile::fUDIFSignature) sig = 0;
 
