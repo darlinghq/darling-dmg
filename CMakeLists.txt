@@ -142,7 +142,7 @@ else (NOT DARLING)
 		src/main-hdiutil.cpp
 	)
 
-	target_link_libraries(hdiutil fuse icucore z bz2 crypto098 xml2 iconv)
+	target_link_libraries(hdiutil fuse icucore z bz2 crypto098 xml2 iconv elfloader)
 	install(TARGETS hdiutil DESTINATION libexec/darling/usr/bin)
 
 endif (NOT DARLING)
