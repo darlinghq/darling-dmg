@@ -294,6 +294,10 @@ int hfs_listxattr(const char* path, char* buffer, size_t size)
 		for (const std::string& str : attrs)
 			output.insert(output.end(), str.c_str(), str.c_str() + str.length() + 1);
 
+        if ( buffer == NULL ) {
+            return output.size();
+        }
+
 		if (size < output.size())
 			return -ERANGE;
 

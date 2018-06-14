@@ -236,14 +236,14 @@ std::vector<uint8_t> HFSHighLevelVolume::getXattr(const std::string& path, const
 		{
 			output.insert(output.end(), reinterpret_cast<uint8_t*>(&ff.file.userInfo),
 						  reinterpret_cast<uint8_t*>(&ff.file.userInfo) + sizeof(ff.file.userInfo));
-			output.insert(output.end(), reinterpret_cast<uint8_t*>(&ff.file.userInfo),
+			output.insert(output.end(), reinterpret_cast<uint8_t*>(&ff.file.finderInfo),
 						  reinterpret_cast<uint8_t*>(&ff.file.finderInfo) + sizeof(ff.file.finderInfo));
 		}
 		else
 		{
 			output.insert(output.end(), reinterpret_cast<uint8_t*>(&ff.folder.userInfo),
 						  reinterpret_cast<uint8_t*>(&ff.folder.userInfo) + sizeof(ff.folder.userInfo));
-			output.insert(output.end(), reinterpret_cast<uint8_t*>(&ff.folder.userInfo),
+			output.insert(output.end(), reinterpret_cast<uint8_t*>(&ff.folder.finderInfo),
 						  reinterpret_cast<uint8_t*>(&ff.folder.finderInfo) + sizeof(ff.folder.finderInfo));
 		}
 	}
