@@ -97,6 +97,7 @@ int32_t HFSZlibReader::readRun(int runIndex, void* buf, int32_t count, uint64_t 
 	// Decompress
 	char inputBuffer[512];
 	int32_t done = 0;
+	int32_t readCompressedSoFar = 0;
 	
 	while (done < count)
 	{
@@ -104,9 +105,12 @@ int32_t HFSZlibReader::readRun(int runIndex, void* buf, int32_t count, uint64_t 
 		int status, thistime;
 		
 		thistime = count - done;
+  
+		int thisTimeCompressed = std::min<uint64_t>(m_offsets[runIndex].second-readCompressedSoFar, sizeof(inputBuffer));
 		
 		if (!m_lastUncompressed)
-			read = m_reader->read(inputBuffer, sizeof(inputBuffer), m_inputPos + m_offsets[runIndex].first);
+			read = m_reader->read(inputBuffer, thisTimeCompressed, m_inputPos + m_offsets[runIndex].first);
+		readCompressedSoFar += read;
 		
 		// Special handling for uncompressed blocks
 		if (m_lastUncompressed || (done == 0 && read > 0 && (inputBuffer[0] & 0xf) == 0xf))

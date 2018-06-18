@@ -46,8 +46,8 @@ int32_t HFSFork::read(void* buf, int32_t count, uint64_t offset)
 	const uint32_t firstBlock = offset / blockSize;
 	uint32_t blocksSoFar;
 	int firstExtent, extent;
-	int firstBlockInFirstExtent;
 	uint32_t read = 0;
+	uint64_t offsetInExtent = offset;
 	
 	if (offset > be(m_fork.logicalSize))
 		count = 0;
@@ -68,11 +68,11 @@ int32_t HFSFork::read(void* buf, int32_t count, uint64_t offset)
 			if (m_extents[i].blockCount + blocksSoFar > firstBlock)
 			{
 				firstExtent = i;
-				firstBlockInFirstExtent = firstBlock - blocksSoFar;
 				break;
 			}
 		
 			blocksSoFar += m_extents[i].blockCount;
+			offsetInExtent -= m_extents[i].blockCount * uint64_t(blockSize);
 		}
 	
 		//std::cout << "First extent: " << firstExtent << std::endl;
@@ -89,20 +89,12 @@ int32_t HFSFork::read(void* buf, int32_t count, uint64_t offset)
 	{
 		int32_t thistime;
 		int32_t reallyRead;
-		uint32_t startBlock;
 		uint64_t volumeOffset;
-		
-		//thistime = count-read;
-		
+
 		if (extent >= m_extents.size())
 			loadFromOverflowsFile(blocksSoFar);
 		
-		thistime = std::min<int64_t>(m_extents[extent].blockCount * uint64_t(blockSize), count-read);
-		
-		startBlock = m_extents[extent].startBlock;
-		
-		if (extent == firstExtent)
-			startBlock += firstBlockInFirstExtent;
+		thistime = std::min<int64_t>(m_extents[extent].blockCount * uint64_t(blockSize) - offsetInExtent, count-read);
 		
 		if (thistime == 0)
 			throw std::logic_error("Internal error: thistime == 0");
@@ -111,10 +103,7 @@ int32_t HFSFork::read(void* buf, int32_t count, uint64_t offset)
 		//std::cout << "Extent " << extent << " has " << m_extents[extent].blockCount << " blocks\n";
 		//std::cout << "This extent holds " << m_extents[extent].blockCount * uint64_t(blockSize) << " bytes\n";	
 		//std::cout << "Reading " << thistime << " from block: " << startBlock << ", block size: " << blockSize <<  std::endl;
-		volumeOffset = uint64_t(startBlock) * blockSize;
-		
-		if (extent == firstExtent)
-			volumeOffset += offset % blockSize;
+		volumeOffset = m_extents[extent].startBlock * uint64_t(blockSize) + offsetInExtent;
 		
 		reallyRead = m_volume->m_reader->read((char*)buf + read, thistime, volumeOffset);
 		assert(reallyRead <= thistime);
@@ -130,6 +119,7 @@ int32_t HFSFork::read(void* buf, int32_t count, uint64_t offset)
 		blocksSoFar += m_extents[extent].blockCount;
 		//std::cout << "Blocks so far: " << blocksSoFar << std::endl;
 		extent++;
+		offsetInExtent = 0;
 	}
 	
 	assert(read <= count);
