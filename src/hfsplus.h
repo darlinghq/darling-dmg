@@ -187,13 +187,22 @@ struct FileInfo
 	uint16_t reservedField;
 };
 
+//struct ExtendedFileInfo
+//{
+//    int16_t reserved1[4];
+//    uint16_t extendedFinderFlags;
+//    int16_t reserved2;
+//    int32_t putAwayFolderID;
+//};
+// looking in Apple Source, this is the modern definition of ExtendedFileInfo
 struct ExtendedFileInfo
 {
-	int16_t reserved1[4];
-	uint16_t extendedFinderFlags;
-	int16_t reserved2;
-	int32_t putAwayFolderID;
-};
+	uint32_t document_id;
+	uint32_t date_added;
+	uint16_t extended_flags;
+	uint16_t reserved2;
+	uint32_t write_gen_counter;
+} __attribute__((aligned(2), packed));
 
 struct FolderInfo
 {
@@ -203,14 +212,23 @@ struct FolderInfo
 	uint16_t reservedField;
 };
 
+//struct ExtendedFolderInfo
+//{
+//    Point scrollPosition;
+//    int32_t reserved1;
+//    uint16_t extendedFinderFlags;
+//    int16_t reserved2;
+//    int32_t putAwayFolderID;
+//};
+// looking in Apple Source, this is the modern definition of ExtendedFolderInfo
 struct ExtendedFolderInfo
 {
-	Point scrollPosition;
-	int32_t reserved1;
-	uint16_t extendedFinderFlags;
-	int16_t reserved2;
-	int32_t putAwayFolderID;
-};
+	uint32_t document_id;
+	uint32_t date_added;
+	uint16_t extended_flags;
+	uint16_t reserved3;
+	uint32_t write_gen_counter;
+} __attribute__((aligned(2), packed));
 
 struct HFSPlusCatalogFolder
 {

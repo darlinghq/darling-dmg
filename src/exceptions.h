@@ -30,4 +30,19 @@ public:
 	using std::runtime_error::runtime_error;
 };
 
+
+// Used to indicate non-existent xattr
+class attribute_not_found_error : public std::exception
+{
+public:
+	virtual const char* what() const noexcept override { return "Attribute not found (93)"; }
+};
+
+// Used to indicate non-existent xattr on a directory
+class operation_not_permitted_error : public std::exception
+{
+public:
+	virtual const char* what() const noexcept override { return "Operation not permitted (1)"; }
+};
+
 #endif
