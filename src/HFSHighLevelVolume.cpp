@@ -184,14 +184,37 @@ std::vector<std::string> HFSHighLevelVolume::listXattr(const std::string& path)
 	HFSPlusCatalogFileOrFolder ff;
 	int err;
 
-	output.push_back(XATTR_RESOURCE_FORK);
-	output.push_back(XATTR_FINDER_INFO);
-
 	// get CNID
 	err = m_tree->stat(path, &ff);
 
 	if (err != 0)
 		throw file_not_found_error(path);
+
+    if (ff.file.recordType == RecordType::kHFSPlusFileRecord)
+    {
+        // Push ressource fork only if there is one
+        if (ff.file.resourceFork.logicalSize != 0) output.push_back(XATTR_RESOURCE_FORK);
+        // Push finder only if there is non zero data in it, excepted non-exposed field.
+        ExtendedFileInfo newFinderInfo = ff.file.finderInfo;
+        newFinderInfo.document_id = 0;
+        newFinderInfo.date_added = 0;
+        newFinderInfo.write_gen_counter = 0;
+        const char zero[sizeof(newFinderInfo)] = { 0 };
+        if (  memcmp(&newFinderInfo, zero, sizeof(newFinderInfo)) != 0  ||  memcmp(&ff.file.userInfo, zero, sizeof(ff.file.userInfo)) != 0  ) {
+            output.push_back(XATTR_FINDER_INFO);
+        }
+    }else{
+        // Folder don't hace ressource fork
+        // Push finder only if there is non zero data in it, excepted non-exposed field.
+        ExtendedFolderInfo newFolderInfo = ff.folder.finderInfo;
+        newFolderInfo.document_id = 0;
+        newFolderInfo.date_added = 0;
+        newFolderInfo.write_gen_counter = 0;
+        const char zero[sizeof(newFolderInfo)] = { 0 };
+        if (  memcmp(&newFolderInfo, zero, sizeof(newFolderInfo)) != 0  ||  memcmp(&ff.folder.userInfo, zero, sizeof(ff.folder.userInfo)) != 0  ) {
+            output.push_back(XATTR_FINDER_INFO);
+        }
+    }
 
 	if (m_volume->attributes())
 	{
@@ -216,9 +239,15 @@ std::vector<uint8_t> HFSHighLevelVolume::getXattr(const std::string& path, const
 		std::shared_ptr<Reader> file;
 
 		rv = m_tree->openFile(spath.c_str(), file, true);
+        if ( rv == -EISDIR ) {
+            throw operation_not_permitted_error();
+        }
 		if (rv < 0)
 			throw file_not_found_error(path);
-
+			
+        if ( file->length() == 0 )
+        	throw attribute_not_found_error();
+        	
 		rv = std::min<int>(std::numeric_limits<int>::max(), file->length());
 		output.resize(rv);
 
@@ -234,17 +263,27 @@ std::vector<uint8_t> HFSHighLevelVolume::getXattr(const std::string& path, const
 
 		if (ff.file.recordType == RecordType::kHFSPlusFileRecord)
 		{
+	    // do not exposed some field. Found this in Apple source, like in hfs_attrlist.c line 865 of hfs-407.30.1
+            ExtendedFileInfo newFinderInfo = ff.file.finderInfo;
+            newFinderInfo.document_id = 0;
+            newFinderInfo.date_added = 0;
+            newFinderInfo.write_gen_counter = 0;
 			output.insert(output.end(), reinterpret_cast<uint8_t*>(&ff.file.userInfo),
 						  reinterpret_cast<uint8_t*>(&ff.file.userInfo) + sizeof(ff.file.userInfo));
-			output.insert(output.end(), reinterpret_cast<uint8_t*>(&ff.file.finderInfo),
-						  reinterpret_cast<uint8_t*>(&ff.file.finderInfo) + sizeof(ff.file.finderInfo));
+			output.insert(output.end(), reinterpret_cast<uint8_t*>(&newFinderInfo),
+						  reinterpret_cast<uint8_t*>(&newFinderInfo) + sizeof(newFinderInfo));
 		}
 		else
 		{
+	    // do not exposed some field. Found this in Apple source, like in hfs_attrlist.c line 865 of hfs-407.30.1
+            ExtendedFolderInfo newFolderInfo = ff.folder.finderInfo;
+            newFolderInfo.document_id = 0;
+            newFolderInfo.date_added = 0;
+            newFolderInfo.write_gen_counter = 0;
 			output.insert(output.end(), reinterpret_cast<uint8_t*>(&ff.folder.userInfo),
 						  reinterpret_cast<uint8_t*>(&ff.folder.userInfo) + sizeof(ff.folder.userInfo));
-			output.insert(output.end(), reinterpret_cast<uint8_t*>(&ff.folder.finderInfo),
-						  reinterpret_cast<uint8_t*>(&ff.folder.finderInfo) + sizeof(ff.folder.finderInfo));
+			output.insert(output.end(), reinterpret_cast<uint8_t*>(&newFolderInfo),
+						  reinterpret_cast<uint8_t*>(&newFolderInfo) + sizeof(newFolderInfo));
 		}
 	}
 	else
@@ -258,9 +297,9 @@ std::vector<uint8_t> HFSHighLevelVolume::getXattr(const std::string& path, const
 			throw file_not_found_error(spath);
 
 		if (!m_volume->attributes())
-			throw no_data_error();
+			throw attribute_not_found_error();
 		if (!m_volume->attributes()->getattr(ff.file.fileID, name, output))
-			throw no_data_error();
+			throw attribute_not_found_error();
 	}
 
 	return output;
