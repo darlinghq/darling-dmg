@@ -129,6 +129,11 @@ public:
 			m_index++;
 			return *this;
 		}
+		RecordIterator& operator--()
+		{
+			m_index--;
+			return *this;
+		}
 
 		difference_type operator-(const RecordIterator& that)
 		{
