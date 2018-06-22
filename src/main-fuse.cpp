@@ -160,6 +160,16 @@ int handle_exceptions(std::function<int()> func)
 		std::cerr << "Non-existent data requested" << std::endl;
 		return -ENODATA;
 	}
+    catch (const attribute_not_found_error& e)
+    {
+        std::cerr << e.what() << std::endl;
+        return -ENOATTR;
+    }
+    catch (const operation_not_permitted_error& e)
+    {
+        std::cerr << e.what() << std::endl;
+        return -EPERM;
+    }
 	catch (const std::logic_error& e)
 	{
 		std::cerr << "Fatal error: " << e.what() << std::endl;
@@ -275,6 +285,10 @@ int hfs_getxattr(const char* path, const char* name, char* value, size_t vlen)
 
 		data = g_volume->getXattr(path, name);
 
+        if ( value == NULL ) {
+            return data.size();
+        }
+
 		if (vlen < data.size())
 			return -ERANGE;
 
@@ -293,6 +307,10 @@ int hfs_listxattr(const char* path, char* buffer, size_t size)
 
 		for (const std::string& str : attrs)
 			output.insert(output.end(), str.c_str(), str.c_str() + str.length() + 1);
+
+        if ( buffer == NULL ) {
+            return output.size();
+        }
 
 		if (size < output.size())
 			return -ERANGE;
