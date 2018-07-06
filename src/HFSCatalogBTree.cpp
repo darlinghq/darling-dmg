@@ -352,8 +352,13 @@ void HFSCatalogBTree::fixEndian(HFSPlusCatalogFileOrFolder& ff)
 
 time_t HFSCatalogBTree::appleToUnixTime(uint32_t apple)
 {
-	const time_t offset = 2082844800L;
-	return apple - offset;
+	const time_t offset = 2082844800L; // Nb of seconds between 1st January 1904 12:00:00 and unix epoch
+	if (apple == 0)
+		return 0; // 0 stays 0, even if it change the date from 1904 to 1970.
+	// Force time to wrap around and stay positive number. That's how Mac does it.
+	// File from before 70 will have date in the future.
+	// Example : Time value 2082844799, that should be Dec 31st 12:59:59 PM will become February 7th 2106 6:28:15 AM.
+	return uint32_t(apple - offset);
 }
 
 int HFSCatalogBTree::openFile(const std::string& path, std::shared_ptr<Reader>& forkOut, bool resourceFork)
