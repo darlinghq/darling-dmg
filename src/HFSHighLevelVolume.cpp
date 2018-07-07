@@ -180,36 +180,36 @@ std::shared_ptr<Reader> HFSHighLevelVolume::openFile(const std::string& path)
 
 void getXattrFinderInfo(const HFSPlusCatalogFileOrFolder& ff, uint8_t buf[32])
 {
-    FileInfo& newUserInfo = (*((FileInfo*)buf));
-    FolderInfo& newFolderInfo = (*((FolderInfo*)buf));
-    ExtendedFileInfo& newFinderInfo (*((ExtendedFileInfo*)(buf+16)));
-    ExtendedFolderInfo& newExtendedFolderInfo (*((ExtendedFolderInfo*)(buf+16)));
-    if (ff.file.recordType == RecordType::kHFSPlusFileRecord)
-    {
-        // Push finder only if there is non zero data in it, excepted non-exposed field.
-        newUserInfo = ff.file.userInfo;
-        if ( newUserInfo.fileType == kSymLinkFileType )
-        	memset(&newUserInfo.fileType, 0, sizeof(newUserInfo.fileType));
+	FileInfo& newUserInfo = (*((FileInfo*)buf));
+	FolderInfo& newFolderInfo = (*((FolderInfo*)buf));
+	ExtendedFileInfo& newFinderInfo (*((ExtendedFileInfo*)(buf+16)));
+	ExtendedFolderInfo& newExtendedFolderInfo (*((ExtendedFolderInfo*)(buf+16)));
+	if (ff.file.recordType == RecordType::kHFSPlusFileRecord)
+	{
+		// Push finder only if there is non zero data in it, excepted non-exposed field.
+		newUserInfo = ff.file.userInfo;
+		if ( newUserInfo.fileType == kSymLinkFileType )
+			memset(&newUserInfo.fileType, 0, sizeof(newUserInfo.fileType));
 		else
 			newUserInfo.fileType = be(newUserInfo.fileType);
-        if ( newUserInfo.fileCreator == kSymLinkCreator )
-        	memset(&newUserInfo.fileCreator, 0, sizeof(newUserInfo.fileCreator));
+		if ( newUserInfo.fileCreator == kSymLinkCreator )
+			memset(&newUserInfo.fileCreator, 0, sizeof(newUserInfo.fileCreator));
 		else
 			newUserInfo.fileCreator = be(newUserInfo.fileCreator);
 		
-        newFinderInfo = ff.file.finderInfo;
-        newFinderInfo.document_id = 0;
-        newFinderInfo.date_added = 0;
-        newFinderInfo.write_gen_counter = 0;
-    }else{
-        // Folder don't hace ressource fork
-        // Push finder only if there is non zero data in it, excepted non-exposed field.
-        newFolderInfo = ff.folder.userInfo;
-        newExtendedFolderInfo = ff.folder.finderInfo;
-        newExtendedFolderInfo.document_id = 0;
-        newExtendedFolderInfo.date_added = 0;
-        newExtendedFolderInfo.write_gen_counter = 0;
-    }
+		newFinderInfo = ff.file.finderInfo;
+		newFinderInfo.document_id = 0;
+		newFinderInfo.date_added = 0;
+		newFinderInfo.write_gen_counter = 0;
+	}else{
+		// Folder don't hace ressource fork
+		// Push finder only if there is non zero data in it, excepted non-exposed field.
+		newFolderInfo = ff.folder.userInfo;
+		newExtendedFolderInfo = ff.folder.finderInfo;
+		newExtendedFolderInfo.document_id = 0;
+		newExtendedFolderInfo.date_added = 0;
+		newExtendedFolderInfo.write_gen_counter = 0;
+	}
 }
 
 std::vector<std::string> HFSHighLevelVolume::listXattr(const std::string& path)
