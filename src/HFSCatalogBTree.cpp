@@ -153,9 +153,18 @@ int HFSCatalogBTree::listDirectory(const std::string& path, std::map<std::string
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 		fixEndian(native);
 #endif
-		replaceChars(filename, '/', ':'); // Issue #36: / and : have swapped meaning in HFS+
-
-		contents[filename] = native;
+		/* Filter out :
+		 * - "\0\0\0\0HFS+ Private Data" (truth is, every filename whose first char is \0 will be filtered out)
+		 * - ".HFS+ Private Directory Data\r"
+		 * - ".journal"
+		 * - ".journal_info_block"
+		 * from root directory
+		 */
+		if (dir.folder.folderID != kHFSRootFolderID  ||  (filename[0]!=0  &&  filename.compare(".HFS+ Private Directory Data\r")!=0  &&  filename.compare(".journal")!=0  &&  filename.compare(".journal_info_block")!=0))
+		{
+			replaceChars(filename, '/', ':'); // Issue #36: / and : have swapped meaning in HFS+
+			contents[filename] = native;
+		}
 	}
 
 	return 0;
