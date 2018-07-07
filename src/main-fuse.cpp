@@ -276,7 +276,7 @@ int hfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler, off_t offse
 
 }
 
-#ifdef __APPLE__
+#if defined(__APPLE__) && !defined(DARLING)
 int hfs_getxattr(const char* path, const char* name, char* value, size_t vlen, uint32_t position)
 #else
 int hfs_getxattr(const char* path, const char* name, char* value, size_t vlen)
