@@ -10,8 +10,12 @@ static const int MAX_SYMLINKS = 50;
 extern UConverter *g_utf16be;
 
 HFSCatalogBTree::HFSCatalogBTree(std::shared_ptr<HFSFork> fork, HFSVolume* volume, CacheZone* zone)
-	: HFSBTree(fork, zone, "Catalog"), m_volume(volume)
+	: HFSBTree(fork, zone, "Catalog"), m_volume(volume), m_hardLinkDirID(0)
 {
+	HFSPlusCatalogFileOrFolder ff;
+	int rv = stat(std::string("\0\0\0\0HFS+ Private Data", 21), &ff);
+	if (rv == 0)
+		m_hardLinkDirID = ff.folder.folderID;
 }
 
 bool HFSCatalogBTree::isCaseSensitive() const
@@ -179,10 +183,28 @@ static void split(const std::string &s, char delim, std::vector<std::string>& el
 		elems.push_back(item);
 }
 
+HFSPlusCatalogFileOrFolder* HFSCatalogBTree::findHFSPlusCatalogFileOrFolderForParentIdAndName(HFSCatalogNodeID parentID, const std::string &elem)
+{
+	HFSBTreeNode leafNode;
+	
+	HFSPlusCatalogKey desiredKey;
+	
+	desiredKey.nodeName.length = StringToUnichar(elem, desiredKey.nodeName.string, sizeof(desiredKey.nodeName.string));
+	//desiredKey.nodeName.length = ustr.extract(0, ustr.length(), (char*) desiredKey.nodeName.string, "UTF-16BE") / 2;
+	desiredKey.nodeName.length = htobe16(desiredKey.nodeName.length);
+	
+	desiredKey.parentID = htobe32(parentID);
+	
+	leafNode = findLeafNode((Key*) &desiredKey, isCaseSensitive() ? caseSensitiveComparator : caseInsensitiveComparator);
+	if (leafNode.isInvalid())
+		return NULL;
+	
+	return findRecordForParentAndName(leafNode, parentID, elem);
+}
+
 int HFSCatalogBTree::stat(std::string path, HFSPlusCatalogFileOrFolder* s, bool noByteSwap)
 {
 	std::vector<std::string> elems;
-	HFSBTreeNode leafNode;
 	//HFSCatalogNodeID parent = kHFSRootParentID;
 	HFSPlusCatalogFileOrFolder* last = nullptr;
 
@@ -199,26 +221,13 @@ int HFSCatalogBTree::stat(std::string path, HFSPlusCatalogFileOrFolder* s, bool 
 	for (size_t i = 0; i < elems.size(); i++)
 	{
 		std::string elem = elems[i];
-		//UnicodeString ustr = UnicodeString::fromUTF8(elem);
-		HFSPlusCatalogKey desiredKey;
-		HFSCatalogNodeID parentID = last ? be(last->folder.folderID) : kHFSRootParentID;
-
 		replaceChars(elem, ':', '/'); // Issue #36: / and : have swapped meaning in HFS+
+
+		HFSCatalogNodeID parentID = last ? be(last->folder.folderID) : kHFSRootParentID;
 
 		//if (ustr.length() > 255) // FIXME: there is a UCS-2 vs UTF-16 issue here!
 		//	return -ENAMETOOLONG;
-
-		desiredKey.nodeName.length = StringToUnichar(elem, desiredKey.nodeName.string, sizeof(desiredKey.nodeName.string));
-		//desiredKey.nodeName.length = ustr.extract(0, ustr.length(), (char*) desiredKey.nodeName.string, "UTF-16BE") / 2;
-		desiredKey.nodeName.length = htobe16(desiredKey.nodeName.length);
-
-		desiredKey.parentID = htobe32(parentID);
-
-		leafNode = findLeafNode((Key*) &desiredKey, isCaseSensitive() ? caseSensitiveComparator : caseInsensitiveComparator);
-		if (leafNode.isInvalid())
-			return -ENOENT;
-
-		last = findRecordForParentAndName(leafNode, parentID, elem);
+		last = findHFSPlusCatalogFileOrFolderForParentIdAndName(parentID, elem);
 		if (!last)
 			return -ENOENT;
 
@@ -247,6 +256,15 @@ int HFSCatalogBTree::stat(std::string path, HFSPlusCatalogFileOrFolder* s, bool 
 		//parent = last->folder.folderID;
 	}
 
+	if (be(last->file.userInfo.fileType) == kHardLinkFileType  &&  m_hardLinkDirID != 0) {
+		std::string iNodePath;
+		iNodePath += "iNode";
+		iNodePath += std::to_string(be(last->file.permissions.special.iNodeNum));
+		HFSPlusCatalogFileOrFolder* ffhl = findHFSPlusCatalogFileOrFolderForParentIdAndName(m_hardLinkDirID, iNodePath);
+		if (ffhl)
+			last = ffhl;
+	}
+
 	memcpy(s, last, sizeof(*s));
 
 #if __BYTE_ORDER == __LITTLE_ENDIAN
@@ -258,6 +276,7 @@ int HFSCatalogBTree::stat(std::string path, HFSPlusCatalogFileOrFolder* s, bool 
 
 	return 0;
 }
+
 HFSPlusCatalogFileOrFolder* HFSCatalogBTree::findRecordForParentAndName(const HFSBTreeNode& leafNode, HFSCatalogNodeID cnid, const std::string& name)
 {
 	std::map<std::string, HFSPlusCatalogFileOrFolder*> result;
@@ -292,8 +311,9 @@ void HFSCatalogBTree::findRecordForParentAndName(const HFSBTreeNode& leafNode, H
 			case RecordType::kHFSPlusFolderRecord:
 			case RecordType::kHFSPlusFileRecord:
 			{
-				// skip "\0\0HFS+ Private Data"
-				if (recordKey->nodeName.string[0] != 0 && be(recordKey->parentID) == cnid)
+				
+				// do NOT skip "\0\0\0\0HFS+ Private Data", we need it to get is folderID in constructor
+				if ( /* recordKey->nodeName.string[0] != 0 &&*/ be(recordKey->parentID) == cnid)
 				{
 					bool equal = name.empty();
 					if (!equal)

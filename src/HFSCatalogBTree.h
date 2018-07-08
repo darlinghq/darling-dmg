@@ -39,9 +39,12 @@ private:
 	static void fixEndian(HFSPlusCatalogFileOrFolder& ff);
 	static void replaceChars(std::string& str, char oldChar, char newChar);
 	
+	HFSPlusCatalogFileOrFolder* findHFSPlusCatalogFileOrFolderForParentIdAndName(HFSCatalogNodeID parentID, const std::string &elem);
+
 	void dumpTree(int nodeIndex, int depth) const;
 private:
 	HFSVolume* m_volume;
+	HFSCatalogNodeID m_hardLinkDirID;
 };
 
 #endif

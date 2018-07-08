@@ -321,7 +321,7 @@ void HFSHighLevelVolume::hfs_nativeToStat(const HFSPlusCatalogFileOrFolder& ff, 
 	stat->st_gid = ff.file.permissions.groupID;
 	stat->st_ino = ff.file.fileID;
 	stat->st_blksize = 512;
-	stat->st_nlink = 1;
+	stat->st_nlink = ff.file.permissions.special.linkCount;
 
 	if (ff.file.recordType == RecordType::kHFSPlusFileRecord)
 	{
