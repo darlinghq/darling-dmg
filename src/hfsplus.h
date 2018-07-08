@@ -320,17 +320,7 @@ struct HFSPlusAttributeDataInline
 	uint8_t attrData[];
 };
 
-/*
- *    Alias type and creator for directory hard links
- */
-enum {
-	kHFSAliasType        = 0x66647270,     /* 'fdrp' */
-	kHFSAliasCreator    = 0x4D414353    /* 'MACS' */
-};
-enum {
-	kHardLinkFileType = 0x686C6E6B,  /* 'hlnk' */
-	kHFSPlusCreator   = 0x6866732B   /* 'hfs+' */
-};
+// File type and creator for symlink
 enum {
 	kSymLinkFileType  = 0x736C6E6B, /* 'slnk' */
 	kSymLinkCreator   = 0x72686170  /* 'rhap' */
