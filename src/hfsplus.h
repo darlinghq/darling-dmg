@@ -322,5 +322,11 @@ struct HFSPlusAttributeDataInline
 
 #pragma pack()
 
+// File type and creator for hard link
+enum {
+	kHardLinkFileType = 0x686C6E6B,  /* 'hlnk' */
+	kHFSPlusCreator   = 0x6866732B   /* 'hfs+' */
+};
+
 #endif
 
