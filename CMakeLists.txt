@@ -67,6 +67,18 @@ if (WITH_TESTS)
 	add_test(NAME CacheTest COMMAND CacheTest)
 endif (WITH_TESTS)
 
+if (COMPILE_WITH_DECRYPTION_SUPPORT)
+	set(Decrypt_SRC
+		src/decrypt/Aes.cpp
+		src/decrypt/Crypto.cpp
+		src/decrypt/Des.cpp
+		src/decrypt/EncryptedReader.cpp
+		src/decrypt/Sha1.cpp
+		src/decrypt/Sha256.cpp
+		src/decrypt/TripleDes.cpp
+	)
+endif (COMPILE_WITH_DECRYPTION_SUPPORT)
+
 add_library(dmg SHARED
 	src/unichar.cpp
 	src/Reader.cpp
