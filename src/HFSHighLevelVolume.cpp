@@ -178,6 +178,40 @@ std::shared_ptr<Reader> HFSHighLevelVolume::openFile(const std::string& path)
 	return file;
 }
 
+void getXattrFinderInfo(const HFSPlusCatalogFileOrFolder& ff, uint8_t buf[32])
+{
+	FileInfo& newUserInfo = (*((FileInfo*)buf));
+	FolderInfo& newFolderInfo = (*((FolderInfo*)buf));
+	ExtendedFileInfo& newFinderInfo (*((ExtendedFileInfo*)(buf+16)));
+	ExtendedFolderInfo& newExtendedFolderInfo (*((ExtendedFolderInfo*)(buf+16)));
+	if (ff.file.recordType == RecordType::kHFSPlusFileRecord)
+	{
+		// Push finder only if there is non zero data in it, excepted non-exposed field.
+		newUserInfo = ff.file.userInfo;
+		if ( newUserInfo.fileType == kSymLinkFileType )
+			memset(&newUserInfo.fileType, 0, sizeof(newUserInfo.fileType));
+		else
+			newUserInfo.fileType = be(newUserInfo.fileType);
+		if ( newUserInfo.fileCreator == kSymLinkCreator )
+			memset(&newUserInfo.fileCreator, 0, sizeof(newUserInfo.fileCreator));
+		else
+			newUserInfo.fileCreator = be(newUserInfo.fileCreator);
+		
+		newFinderInfo = ff.file.finderInfo;
+		newFinderInfo.document_id = 0;
+		newFinderInfo.date_added = 0;
+		newFinderInfo.write_gen_counter = 0;
+	}else{
+		// Folder don't hace ressource fork
+		// Push finder only if there is non zero data in it, excepted non-exposed field.
+		newFolderInfo = ff.folder.userInfo;
+		newExtendedFolderInfo = ff.folder.finderInfo;
+		newExtendedFolderInfo.document_id = 0;
+		newExtendedFolderInfo.date_added = 0;
+		newExtendedFolderInfo.write_gen_counter = 0;
+	}
+}
+
 std::vector<std::string> HFSHighLevelVolume::listXattr(const std::string& path)
 {
 	std::vector<std::string> output;
@@ -190,40 +224,23 @@ std::vector<std::string> HFSHighLevelVolume::listXattr(const std::string& path)
 	if (err != 0)
 		throw file_not_found_error(path);
 
-	if (ff.file.recordType == RecordType::kHFSPlusFileRecord)
-	{
-		// Push resource fork only if there is one
-		if (ff.file.resourceFork.logicalSize != 0)
-			output.push_back(XATTR_RESOURCE_FORK);
+	uint8_t buf[32];
+	const char zero[32] = { 0 };
+	getXattrFinderInfo(ff, buf);
+	if (  memcmp(buf, zero, 32) != 0 )  // push FinderInfo only is non zero
+		output.push_back(XATTR_FINDER_INFO);
 
-		// Push finder only if there is non zero data in it, excepted non-exposed field.
-		ExtendedFileInfo newFinderInfo = ff.file.finderInfo;
-		newFinderInfo.document_id = 0;
-		newFinderInfo.date_added = 0;
-		newFinderInfo.write_gen_counter = 0;
-		const char zero[sizeof(newFinderInfo)] = { 0 };
-
-		if (memcmp(&newFinderInfo, zero, sizeof(newFinderInfo)) != 0 || memcmp(&ff.file.userInfo, zero, sizeof(ff.file.userInfo)) != 0)
-			output.push_back(XATTR_FINDER_INFO);
-	}
-	else
-	{
-		// Folder don't hace ressource fork
-		// Push finder only if there is non zero data in it, excepted non-exposed field.
-		ExtendedFolderInfo newFolderInfo = ff.folder.finderInfo;
-		newFolderInfo.document_id = 0;
-		newFolderInfo.date_added = 0;
-		newFolderInfo.write_gen_counter = 0;
-		const char zero[sizeof(newFolderInfo)] = { 0 };
-
-		if (memcmp(&newFolderInfo, zero, sizeof(newFolderInfo)) != 0 || memcmp(&ff.folder.userInfo, zero, sizeof(ff.folder.userInfo)) != 0)
-			output.push_back(XATTR_FINDER_INFO);
+	// Push ressource fork only if there is one
+	if (ff.folder.recordType == RecordType::kHFSPlusFileRecord  &&  ff.file.resourceFork.logicalSize != 0  &&  !(ff.file.permissions.ownerFlags & HFS_PERM_OFLAG_COMPRESSED)) {
+		output.push_back(XATTR_RESOURCE_FORK);
 	}
 
 	if (m_volume->attributes())
 	{
-		for (const auto& kv : m_volume->attributes()->getattr(ff.file.fileID))
-			output.push_back(kv.first);
+		for (const auto& kv : m_volume->attributes()->getattr(ff.file.fileID)) {
+			if (!(ff.file.permissions.ownerFlags & HFS_PERM_OFLAG_COMPRESSED)  ||  kv.first != "com.apple.decmpfs")
+				output.push_back(kv.first);
+		}
 	}
 
 	return output;
@@ -264,30 +281,11 @@ std::vector<uint8_t> HFSHighLevelVolume::getXattr(const std::string& path, const
 		if (rv != 0)
 			throw file_not_found_error(spath);
 
-		if (ff.file.recordType == RecordType::kHFSPlusFileRecord)
-		{
-			// Do not expose some fields. Found this in Apple source, like in hfs_attrlist.c line 865 of hfs-407.30.1
-			ExtendedFileInfo newFinderInfo = ff.file.finderInfo;
-			newFinderInfo.document_id = 0;
-			newFinderInfo.date_added = 0;
-			newFinderInfo.write_gen_counter = 0;
-			output.insert(output.end(), reinterpret_cast<uint8_t*>(&ff.file.userInfo),
-						  reinterpret_cast<uint8_t*>(&ff.file.userInfo) + sizeof(ff.file.userInfo));
-			output.insert(output.end(), reinterpret_cast<uint8_t*>(&newFinderInfo),
-						  reinterpret_cast<uint8_t*>(&newFinderInfo) + sizeof(newFinderInfo));
-		}
-		else
-		{
-			// Do not expose some fields. Found this in Apple source, like in hfs_attrlist.c line 865 of hfs-407.30.1
-			ExtendedFolderInfo newFolderInfo = ff.folder.finderInfo;
-			newFolderInfo.document_id = 0;
-			newFolderInfo.date_added = 0;
-			newFolderInfo.write_gen_counter = 0;
-			output.insert(output.end(), reinterpret_cast<uint8_t*>(&ff.folder.userInfo),
-						  reinterpret_cast<uint8_t*>(&ff.folder.userInfo) + sizeof(ff.folder.userInfo));
-			output.insert(output.end(), reinterpret_cast<uint8_t*>(&newFolderInfo),
-						  reinterpret_cast<uint8_t*>(&newFolderInfo) + sizeof(newFolderInfo));
-		}
+		uint8_t buf[32];
+		const char zero[32] = { 0 };
+		getXattrFinderInfo(ff, buf);
+		if (  memcmp(buf, zero, 32) != 0 ) // push FinderInfo only is non zero
+			output.insert(output.end(), reinterpret_cast<uint8_t*>(buf), reinterpret_cast<uint8_t*>(buf)+32);
 	}
 	else
 	{

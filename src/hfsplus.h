@@ -320,6 +320,12 @@ struct HFSPlusAttributeDataInline
 	uint8_t attrData[];
 };
 
+// File type and creator for symlink
+enum {
+	kSymLinkFileType  = 0x736C6E6B, /* 'slnk' */
+	kSymLinkCreator   = 0x72686170  /* 'rhap' */
+};
+
 #pragma pack()
 
 // File type and creator for hard link

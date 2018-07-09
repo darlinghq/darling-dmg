@@ -366,6 +366,8 @@ void HFSCatalogBTree::fixEndian(HFSPlusCatalogFileOrFolder& ff)
 #undef swap
 #define swap(x) ff.file.x = be(ff.file.x)
 
+	swap(userInfo.fileCreator);
+	swap(userInfo.fileType);
 	if (ff.file.recordType == RecordType::kHFSPlusFileRecord)
 	{
 		swap(dataFork.logicalSize);
