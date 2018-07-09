@@ -57,14 +57,14 @@ int32_t HFSFork::read(void* buf, int32_t count, uint64_t offset)
 	if (!count)
 		return 0;
 	
+	firstExtent = -1;
+	blocksSoFar = 0;
+	offsetInExtent = offset;
+	int i = 0;
 	do
 	{
-		firstExtent = -1;
-		blocksSoFar = 0;
-		offsetInExtent = offset;
-
 		// locate the first extent
-		for (int i = 0; i < m_extents.size(); i++)
+		for ( ; i < m_extents.size(); i++)
 		{
 			if (m_extents[i].blockCount + blocksSoFar > firstBlock)
 			{
