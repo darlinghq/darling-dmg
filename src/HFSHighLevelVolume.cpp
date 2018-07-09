@@ -92,7 +92,7 @@ void HFSHighLevelVolume::hfs_nativeToStat_decmpfs(const HFSPlusCatalogFileOrFold
 		decmpfs_disk_header* hdr;
 		std::vector<uint8_t> xattrData;
 
-		hdr = get_decmpfs(ff.file.fileID, xattrData);
+		hdr = get_decmpfs(be(ff.file.fileID), xattrData);
 
 		if (hdr != nullptr)
 			stat->st_size = hdr->uncompressed_size;
@@ -135,7 +135,7 @@ std::shared_ptr<Reader> HFSHighLevelVolume::openFile(const std::string& path)
 		decmpfs_disk_header* hdr;
 		std::vector<uint8_t> holder;
 
-		hdr = get_decmpfs(ff.file.fileID, holder);
+		hdr = get_decmpfs(be(ff.file.fileID), holder);
 
 		if (!hdr)
 			throw file_not_found_error(path);
@@ -184,18 +184,18 @@ void getXattrFinderInfo(const HFSPlusCatalogFileOrFolder& ff, uint8_t buf[32])
 	FolderInfo& newFolderInfo = (*((FolderInfo*)buf));
 	ExtendedFileInfo& newFinderInfo (*((ExtendedFileInfo*)(buf+16)));
 	ExtendedFolderInfo& newExtendedFolderInfo (*((ExtendedFolderInfo*)(buf+16)));
-	if (ff.file.recordType == RecordType::kHFSPlusFileRecord)
+	if (be(ff.file.recordType) == RecordType::kHFSPlusFileRecord)
 	{
 		// Push finder only if there is non zero data in it, excepted non-exposed field.
 		newUserInfo = ff.file.userInfo;
-		if ( newUserInfo.fileType == kSymLinkFileType )
+		if ( be(newUserInfo.fileType) == kSymLinkFileType )
 			memset(&newUserInfo.fileType, 0, sizeof(newUserInfo.fileType));
 		else
-			newUserInfo.fileType = be(newUserInfo.fileType);
-		if ( newUserInfo.fileCreator == kSymLinkCreator )
+			newUserInfo.fileType = newUserInfo.fileType;
+		if ( be(newUserInfo.fileCreator) == kSymLinkCreator )
 			memset(&newUserInfo.fileCreator, 0, sizeof(newUserInfo.fileCreator));
 		else
-			newUserInfo.fileCreator = be(newUserInfo.fileCreator);
+			newUserInfo.fileCreator = newUserInfo.fileCreator;
 		
 		newFinderInfo = ff.file.finderInfo;
 		newFinderInfo.document_id = 0;
@@ -231,13 +231,13 @@ std::vector<std::string> HFSHighLevelVolume::listXattr(const std::string& path)
 		output.push_back(XATTR_FINDER_INFO);
 
 	// Push ressource fork only if there is one
-	if (ff.folder.recordType == RecordType::kHFSPlusFileRecord  &&  ff.file.resourceFork.logicalSize != 0  &&  !(ff.file.permissions.ownerFlags & HFS_PERM_OFLAG_COMPRESSED)) {
+	if (be(ff.folder.recordType) == RecordType::kHFSPlusFileRecord  &&  ff.file.resourceFork.logicalSize != 0  &&  !(ff.file.permissions.ownerFlags & HFS_PERM_OFLAG_COMPRESSED)) {
 		output.push_back(XATTR_RESOURCE_FORK);
 	}
 
 	if (m_volume->attributes())
 	{
-		for (const auto& kv : m_volume->attributes()->getattr(ff.file.fileID)) {
+		for (const auto& kv : m_volume->attributes()->getattr(be(ff.file.fileID))) {
 			if (!(ff.file.permissions.ownerFlags & HFS_PERM_OFLAG_COMPRESSED)  ||  kv.first != "com.apple.decmpfs")
 				output.push_back(kv.first);
 		}
@@ -299,7 +299,7 @@ std::vector<uint8_t> HFSHighLevelVolume::getXattr(const std::string& path, const
 
 		if (!m_volume->attributes())
 			throw attribute_not_found_error();
-		if (!m_volume->attributes()->getattr(ff.file.fileID, name, output))
+		if (!m_volume->attributes()->getattr(be(ff.file.fileID), name, output))
 			throw attribute_not_found_error();
 	}
 
@@ -312,38 +312,38 @@ void HFSHighLevelVolume::hfs_nativeToStat(const HFSPlusCatalogFileOrFolder& ff, 
 	memset(stat, 0, sizeof(*stat));
 
 #if defined(__APPLE__) && !defined(DARLING)
-	stat->st_birthtime = HFSCatalogBTree::appleToUnixTime(ff.file.createDate);
+	stat->st_birthtime = HFSCatalogBTree::appleToUnixTime(be(ff.file.createDate));
 #endif
-	stat->st_atime = HFSCatalogBTree::appleToUnixTime(ff.file.accessDate);
-	stat->st_mtime = HFSCatalogBTree::appleToUnixTime(ff.file.contentModDate);
-	stat->st_ctime = HFSCatalogBTree::appleToUnixTime(ff.file.attributeModDate);
-	stat->st_mode = ff.file.permissions.fileMode;
-	stat->st_uid = ff.file.permissions.ownerID;
-	stat->st_gid = ff.file.permissions.groupID;
-	stat->st_ino = ff.file.fileID;
+	stat->st_atime = HFSCatalogBTree::appleToUnixTime(be(ff.file.accessDate));
+	stat->st_mtime = HFSCatalogBTree::appleToUnixTime(be(ff.file.contentModDate));
+	stat->st_ctime = HFSCatalogBTree::appleToUnixTime(be(ff.file.attributeModDate));
+	stat->st_mode = be(ff.file.permissions.fileMode);
+	stat->st_uid = be(ff.file.permissions.ownerID);
+	stat->st_gid = be(ff.file.permissions.groupID);
+	stat->st_ino = be(ff.file.fileID);
 	stat->st_blksize = 512;
-	stat->st_nlink = ff.file.permissions.special.linkCount;
+	stat->st_nlink = be(ff.file.permissions.special.linkCount);
 
-	if (ff.file.recordType == RecordType::kHFSPlusFileRecord)
+	if (be(ff.file.recordType) == RecordType::kHFSPlusFileRecord)
 	{
 		if (!resourceFork)
 		{
-			stat->st_size = ff.file.dataFork.logicalSize;
-			stat->st_blocks = ff.file.dataFork.totalBlocks;
+			stat->st_size = be(ff.file.dataFork.logicalSize);
+			stat->st_blocks = be(ff.file.dataFork.totalBlocks);
 		}
 		else
 		{
-			stat->st_size = ff.file.resourceFork.logicalSize;
-			stat->st_blocks = ff.file.resourceFork.totalBlocks;
+			stat->st_size = be(ff.file.resourceFork.logicalSize);
+			stat->st_blocks = be(ff.file.resourceFork.totalBlocks);
 		}
 
 		if (S_ISCHR(stat->st_mode) || S_ISBLK(stat->st_mode))
-			stat->st_rdev = ff.file.permissions.special.rawDevice;
+			stat->st_rdev = be(ff.file.permissions.special.rawDevice);
 	}
 
 	if (!stat->st_mode)
 	{
-		if (ff.file.recordType == RecordType::kHFSPlusFileRecord)
+		if (be(ff.file.recordType) == RecordType::kHFSPlusFileRecord)
 		{
 			stat->st_mode = S_IFREG;
 			stat->st_mode |= 0444;

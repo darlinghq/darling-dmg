@@ -83,8 +83,15 @@
 #else
 #include <endian.h>
 #endif
+#include "hfsplus.h" // for RecordType
+
 
 template <typename T> T be(T value);
+
+template <> inline RecordType be(RecordType value)
+{
+	return RecordType(be16toh(uint16_t(value)));
+}
 
 template <> inline uint16_t be(uint16_t value)
 {

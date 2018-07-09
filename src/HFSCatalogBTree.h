@@ -17,7 +17,7 @@ public:
 	HFSCatalogBTree(std::shared_ptr<HFSFork> fork, HFSVolume* volume, CacheZone* zone);
 
 	int listDirectory(const std::string& path, std::map<std::string, HFSPlusCatalogFileOrFolder>& contents);
-	int stat(std::string path, HFSPlusCatalogFileOrFolder* s, bool noByteSwap = false);
+	int stat(std::string path, HFSPlusCatalogFileOrFolder* s);
 	int openFile(const std::string& path, std::shared_ptr<Reader>& forkOut, bool resourceFork = false);
 
 	bool isCaseSensitive() const;
