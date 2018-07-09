@@ -276,9 +276,16 @@ int hfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler, off_t offse
 
 }
 
+#if defined(__APPLE__) && !defined(DARLING)
+int hfs_getxattr(const char* path, const char* name, char* value, size_t vlen, uint32_t position)
+#else
 int hfs_getxattr(const char* path, const char* name, char* value, size_t vlen)
+#endif
 {
 	std::cerr << "hfs_getxattr(" << path << ", " << name << ")\n";
+#ifdef __APPLE__
+	if (position > 0) return -ENOSYS; // it's not supported... yet. I think it doesn't happen anymore since osx use less ressource fork
+#endif
 
 	return handle_exceptions([&]() -> int {
 		std::vector<uint8_t> data;

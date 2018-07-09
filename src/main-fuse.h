@@ -13,7 +13,11 @@ int hfs_open(const char* path, struct fuse_file_info* info);
 int hfs_read(const char* path, char* buf, size_t bytes, off_t offset, struct fuse_file_info* info);
 int hfs_release(const char* path, struct fuse_file_info* info);
 int hfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info* info);
-int hfs_getxattr(const char* path, const char* name, char* value, size_t vlen);
+#if defined(__APPLE__) && !defined(DARLING)
+  int hfs_getxattr(const char* path, const char* name, char* value, size_t vlen, uint32_t position);
+#else
+  int hfs_getxattr(const char* path, const char* name, char* value, size_t vlen);
+#endif
 int hfs_listxattr(const char* path, char* buffer, size_t size);
 
 #endif
