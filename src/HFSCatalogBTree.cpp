@@ -183,7 +183,7 @@ static void split(const std::string &s, char delim, std::vector<std::string>& el
 		elems.push_back(item);
 }
 
-HFSPlusCatalogFileOrFolder* HFSCatalogBTree::findHFSPlusCatalogFileOrFolderForParentIdAndName(HFSCatalogNodeID parentID, const std::string &elem)
+HFSBTreeNode HFSCatalogBTree::findHFSBTreeNodeForParentIdAndName(HFSCatalogNodeID parentID, const std::string &elem)
 {
 	HFSBTreeNode leafNode;
 	
@@ -196,15 +196,13 @@ HFSPlusCatalogFileOrFolder* HFSCatalogBTree::findHFSPlusCatalogFileOrFolderForPa
 	desiredKey.parentID = htobe32(parentID);
 	
 	leafNode = findLeafNode((Key*) &desiredKey, isCaseSensitive() ? caseSensitiveComparator : caseInsensitiveComparator);
-	if (leafNode.isInvalid())
-		return NULL;
-	
-	return findRecordForParentAndName(leafNode, parentID, elem);
+	return leafNode;
 }
 
 int HFSCatalogBTree::stat(std::string path, HFSPlusCatalogFileOrFolder* s, bool noByteSwap)
 {
 	std::vector<std::string> elems;
+	HFSBTreeNode leafNode;
 	//HFSCatalogNodeID parent = kHFSRootParentID;
 	HFSPlusCatalogFileOrFolder* last = nullptr;
 
@@ -227,7 +225,10 @@ int HFSCatalogBTree::stat(std::string path, HFSPlusCatalogFileOrFolder* s, bool 
 
 		//if (ustr.length() > 255) // FIXME: there is a UCS-2 vs UTF-16 issue here!
 		//	return -ENAMETOOLONG;
-		last = findHFSPlusCatalogFileOrFolderForParentIdAndName(parentID, elem);
+		leafNode = findHFSBTreeNodeForParentIdAndName(parentID, elem);
+		if (leafNode.isInvalid())
+			return -ENOENT;
+		last = findRecordForParentAndName(leafNode, parentID, elem);
 		if (!last)
 			return -ENOENT;
 
@@ -260,9 +261,12 @@ int HFSCatalogBTree::stat(std::string path, HFSPlusCatalogFileOrFolder* s, bool 
 		std::string iNodePath;
 		iNodePath += "iNode";
 		iNodePath += std::to_string(be(last->file.permissions.special.iNodeNum));
-		HFSPlusCatalogFileOrFolder* ffhl = findHFSPlusCatalogFileOrFolderForParentIdAndName(m_hardLinkDirID, iNodePath);
-		if (ffhl)
-			last = ffhl;
+		HFSBTreeNode leafNodeHl = findHFSBTreeNodeForParentIdAndName(m_hardLinkDirID, iNodePath);
+		if (!leafNode.isInvalid()) {
+			HFSPlusCatalogFileOrFolder* ffhl = findRecordForParentAndName(leafNodeHl, m_hardLinkDirID, iNodePath);
+			if (ffhl)
+				last = ffhl;
+		}
 	}
 
 	memcpy(s, last, sizeof(*s));
