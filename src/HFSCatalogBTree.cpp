@@ -257,11 +257,12 @@ int HFSCatalogBTree::stat(std::string path, HFSPlusCatalogFileOrFolder* s, bool 
 		//parent = last->folder.folderID;
 	}
 
+	HFSBTreeNode leafNodeHl;
 	if (be(last->file.userInfo.fileType) == kHardLinkFileType  &&  m_hardLinkDirID != 0) {
 		std::string iNodePath;
 		iNodePath += "iNode";
 		iNodePath += std::to_string(be(last->file.permissions.special.iNodeNum));
-		HFSBTreeNode leafNodeHl = findHFSBTreeNodeForParentIdAndName(m_hardLinkDirID, iNodePath);
+		leafNodeHl = findHFSBTreeNodeForParentIdAndName(m_hardLinkDirID, iNodePath);
 		if (!leafNode.isInvalid()) {
 			HFSPlusCatalogFileOrFolder* ffhl = findRecordForParentAndName(leafNodeHl, m_hardLinkDirID, iNodePath);
 			if (ffhl)
