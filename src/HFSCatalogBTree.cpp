@@ -263,7 +263,7 @@ int HFSCatalogBTree::stat(std::string path, HFSPlusCatalogFileOrFolder* s, bool 
 		iNodePath += "iNode";
 		iNodePath += std::to_string(be(last->file.permissions.special.iNodeNum));
 		leafNodeHl = findHFSBTreeNodeForParentIdAndName(m_hardLinkDirID, iNodePath);
-		if (!leafNode.isInvalid()) {
+		if (!leafNodeHl.isInvalid()) {
 			HFSPlusCatalogFileOrFolder* ffhl = findRecordForParentAndName(leafNodeHl, m_hardLinkDirID, iNodePath);
 			if (ffhl)
 				last = ffhl;
