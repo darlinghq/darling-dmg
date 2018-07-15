@@ -9,14 +9,16 @@
 #include <vector>
 #include <iostream>
 #include "exceptions.h"
+#include <cassert>
 
 class DMGDecompressor_Zlib : public DMGDecompressor
 {
 public:
 	DMGDecompressor_Zlib(std::shared_ptr<Reader> reader);
 	~DMGDecompressor_Zlib();
-	virtual int32_t decompress(void* output, int32_t outputBytes) override;
+	virtual int32_t decompress(void* output, int32_t count, off_t offset) override;
 private:
+	virtual int32_t decompress(void* output, int32_t outputBytes);
 	z_stream m_strm;
 };
 
@@ -25,8 +27,9 @@ class DMGDecompressor_Bzip2 : public DMGDecompressor
 public:
 	DMGDecompressor_Bzip2(std::shared_ptr<Reader> reader);
 	~DMGDecompressor_Bzip2();
-	virtual int32_t decompress(void* output, int32_t outputBytes) override;
+	virtual int32_t decompress(void* output, int32_t count, off_t offset) override;
 private:
+	virtual int32_t decompress(void* output, int32_t outputBytes);
 	bz_stream m_strm;
 };
 
@@ -34,7 +37,7 @@ class DMGDecompressor_ADC : public DMGDecompressor
 {
 public:
 	DMGDecompressor_ADC(std::shared_ptr<Reader> reader) : DMGDecompressor(reader) {}
-	virtual int32_t decompress(void* output, int32_t outputBytes) override;
+	virtual int32_t decompress(void* output, int32_t count, off_t offset) override;
 };
 
 DMGDecompressor::DMGDecompressor(std::shared_ptr<Reader> reader)
@@ -127,6 +130,28 @@ int32_t DMGDecompressor_Zlib::decompress(void* output, int32_t outputBytes)
 	return done;
 }
 
+int32_t DMGDecompressor_Zlib::decompress(void* output, int32_t count, off_t offset)
+{
+	int32_t done = 0;
+	
+#ifdef DEBUG
+	std::cout << "zlib: Asked to provide " << outputBytes << " bytes\n";
+#endif
+
+	while (offset > 0)
+	{
+		char waste[4096];
+		int32_t to_read = std::min(off_t(sizeof(waste)), offset);
+		int32_t bytesDecompressed = decompress(waste, to_read);
+		if (bytesDecompressed != to_read) {
+//printf("dec != to_read %d %d\n", bytesDecompressed, to_read);
+		}
+		offset -= bytesDecompressed;
+	}
+	done = decompress(output, count);
+	return done;
+}
+
 DMGDecompressor_Bzip2::DMGDecompressor_Bzip2(std::shared_ptr<Reader> reader)
 	: DMGDecompressor(reader)
 {
@@ -182,18 +207,72 @@ int32_t DMGDecompressor_Bzip2::decompress(void* output, int32_t outputBytes)
 	return done;
 }
 
-int32_t DMGDecompressor_ADC::decompress(void* output, int32_t outputBytes)
+int32_t DMGDecompressor_Bzip2::decompress(void* output, int32_t count, off_t offset)
 {
-	int32_t dec;
-	int left;
-	char* input;
-	int inputBytes;
+	int32_t done = 0;
+	
+#ifdef DEBUG
+	std::cout << "bz2: Asked to provide " << outputBytes << " bytes\n";
+#endif
 
-	inputBytes = readSome(&input);
-	
-	left = adc_decompress(inputBytes, (uint8_t*) input, outputBytes, (uint8_t*) output, &dec);
-	
-	processed(inputBytes - left);
-	return dec;
+	while (offset > 0)
+	{
+		char waste[4096];
+		int32_t to_read = std::min(off_t(sizeof(waste)), offset);
+		int32_t bytesDecompressed = decompress(waste, to_read);
+		// bytesDecompressed seems to be always equal to to_read
+		assert(bytesDecompressed == to_read);
+		offset -= bytesDecompressed;
+	}
+	done = decompress(output, count);
+	return done;
+}
+
+int32_t DMGDecompressor_ADC::decompress(void* output, int32_t count, off_t offset)
+{
+	if (offset < 0)
+		throw io_error("offset < 0");
+
+	int32_t countLeft = count;
+	int nb_read;
+	int32_t nb_input_char_used;
+	char* inputBuffer;
+	int restartIndex = 0;
+	int bytes_written;
+
+	uint8_t decrompressBuffer[0x20000 + 0x80]; // 2x maximum lookback + maximum size of a decompressed chunk
+
+	while ( countLeft > 0 )
+	{
+		nb_read = readSome(&inputBuffer);
+
+		nb_input_char_used = adc_decompress(nb_read, (uint8_t*)inputBuffer, sizeof(decrompressBuffer), (uint8_t* )&decrompressBuffer[0], restartIndex, &bytes_written);
+
+		if (nb_input_char_used == 0)
+			throw io_error("nb_input_char_used == 0");
+		
+		if ( bytes_written >= offset+countLeft) {
+			memcpy(output, decrompressBuffer+offset, countLeft);
+			countLeft = 0;
+		}
+		else if ( bytes_written >= 0x20000) {
+			if (offset < 0x10000) {
+				memcpy(output, decrompressBuffer+offset, 0x10000-offset);
+				output = ((uint8_t*)output)+0x10000-offset;
+				offset = 0;
+				countLeft -= 0x10000-offset;
+			}else{
+				// to copy = 0
+				offset -= 0x10000;
+			}
+			memcpy(decrompressBuffer, decrompressBuffer+0x10000, bytes_written - 0x10000);
+			restartIndex = bytes_written - 0x10000;
+		}else{
+			restartIndex = bytes_written;
+		}
+
+		processed(nb_input_char_used);
+	}
+	return count;
 }
 

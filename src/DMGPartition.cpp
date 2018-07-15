@@ -120,39 +120,23 @@ int32_t DMGPartition::readRun(void* buf, int32_t runIndex, uint64_t offsetInSect
 		{
 			std::unique_ptr<DMGDecompressor> decompressor;
 			std::shared_ptr<Reader> subReader;
-			uint32_t done = 0;
 			
 			subReader.reset(new SubReader(m_disk, be(run->compOffset) + be(m_table->dataStart), be(run->compLength)));
 			decompressor.reset(DMGDecompressor::create(runType, subReader));
 			
 			if (!decompressor)
 				throw std::logic_error("DMGDecompressor::create() returned nullptr!");
-			
-			while (done < count)
-			{
-				int32_t dec;
-				
-				if (offsetInSector > 0)
-				{
-					std::unique_ptr<char[]> waste(new char[offsetInSector]);
-					dec = decompressor->decompress(waste.get(), offsetInSector);
-				}
-				else
-					dec = decompressor->decompress(((char*)buf)+done, count-done);
-				//std::cout << "Decompressor returned " << dec << std::endl;
-				
-				if (dec < 0)
-					throw io_error("Error decompressing stream");
-				else if (dec == 0)
-					break;
-				
-				if (offsetInSector > 0)
-					offsetInSector -= dec;
-				else
-					done += dec;
-			}
-			
-			return done;
+
+			unsigned long long int compLength = be(run->sectorCount)*512;
+			if ( offsetInSector > compLength )
+				return 0;
+			if ( offsetInSector + count > compLength )
+				count = compLength - offsetInSector;
+
+			int32_t dec = decompressor->decompress((uint8_t*)buf, count, offsetInSector);
+			if (dec < count)
+				throw io_error("Error decompressing stream");
+			return count;
 		}
 		default:
 			return 0;

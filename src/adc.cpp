@@ -9,14 +9,22 @@ enum
 	ADC_3BYTE
 };
 
-int adc_decompress(int in_size, uint8_t* input, int avail_size, uint8_t* output, int* bytes_written)
+
+/* Compression phrases
+ * store phrase - 1 byte header + data, first byte 0x80-0xFF, max length 0x80 (7 bits + 1), no offset
+ * short phrase - 2 byte header + data, first byte 0x00-0x3F, max length 0x12 (4 bits + 3), max offset 0x3FF (10 bits)
+ * long phrase  - 3 byte header + data, first byte 0x40-0x7F, max length 0x43 (6 bits + 4), max offset 0xFFFF (16 bits)
+ */
+
+int adc_decompress(int in_size, uint8_t* input, int avail_size, uint8_t* output, int restartIndex, int* bytes_written)
 {
 	if (in_size == 0)
 		return 0;
 	
 	bool output_full = false;
+	bool input_short = false;
 	unsigned char *inp = input;
-	unsigned char *outp = output;
+	unsigned char *outp = output + restartIndex;
 	int chunk_size;
 	int offset;
 
@@ -27,6 +35,10 @@ int adc_decompress(int in_size, uint8_t* input, int avail_size, uint8_t* output,
 		{
 		case ADC_PLAIN:
 			chunk_size = adc_chunk_size(*inp);
+			if ( inp - input > in_size - (chunk_size+1) ) {
+				input_short = true;
+				break;
+			}
 			if (outp + chunk_size - output > avail_size)
 			{
 				output_full = true;
@@ -38,6 +50,10 @@ int adc_decompress(int in_size, uint8_t* input, int avail_size, uint8_t* output,
 			break;
 
 		case ADC_2BYTE:
+			if ( inp - input > in_size - 2 ) {
+				input_short = true;
+				break;
+			}
 			chunk_size = adc_chunk_size(*inp);
 			offset = adc_chunk_offset(inp);
 			if (outp + chunk_size - output > avail_size)
@@ -63,6 +79,10 @@ int adc_decompress(int in_size, uint8_t* input, int avail_size, uint8_t* output,
 			break;
 
 		case ADC_3BYTE:
+			if ( inp - input > in_size - 3 ) {
+				input_short = true;
+				break;
+			}
 			chunk_size = adc_chunk_size(*inp);
 			offset = adc_chunk_offset(inp);
 			if (outp + chunk_size - output > avail_size)
@@ -87,7 +107,7 @@ int adc_decompress(int in_size, uint8_t* input, int avail_size, uint8_t* output,
 			}
 			break;
 		}
-		if (output_full)
+		if (output_full || input_short)
 			break;
 	}
 	*bytes_written = outp - output;
