@@ -113,7 +113,7 @@ int32_t HFSZlibReader::readRun(int runIndex, void* buf, int32_t count, uint64_t 
 		readCompressedSoFar += read;
 		
 		// Special handling for uncompressed blocks
-		if (m_lastUncompressed || (done == 0 && read > 0 && (inputBuffer[0] & 0xf) == 0xf))
+		if (m_lastUncompressed || (done == 0 && read > 0 && m_inputPos==0 && (inputBuffer[0] & 0xf) == 0xf))
 		{
 			if (!m_lastUncompressed)
 				m_inputPos++;
@@ -145,6 +145,7 @@ int32_t HFSZlibReader::readRun(int runIndex, void* buf, int32_t count, uint64_t 
 	}
 	
 	m_lastEnd += done;
+	m_lastRun = runIndex;
 	
 	return done;
 }
