@@ -13,7 +13,7 @@ protected:
 	void processed(int bytes);
 public:
 	virtual ~DMGDecompressor() {}
-	virtual int32_t decompress(void* output, int32_t count, off_t offset) = 0;
+	virtual int32_t decompress(void* output, int32_t count, int64_t offset) = 0;
 	
 	static DMGDecompressor* create(RunType runType, std::shared_ptr<Reader> reader);
 private:
