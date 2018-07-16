@@ -16,7 +16,7 @@ class DMGDecompressor_Zlib : public DMGDecompressor
 public:
 	DMGDecompressor_Zlib(std::shared_ptr<Reader> reader);
 	~DMGDecompressor_Zlib();
-	virtual int32_t decompress(void* output, int32_t count, off_t offset) override;
+	virtual int32_t decompress(void* output, int32_t count, int64_t offset) override;
 private:
 	virtual int32_t decompress(void* output, int32_t outputBytes);
 	z_stream m_strm;
@@ -27,7 +27,7 @@ class DMGDecompressor_Bzip2 : public DMGDecompressor
 public:
 	DMGDecompressor_Bzip2(std::shared_ptr<Reader> reader);
 	~DMGDecompressor_Bzip2();
-	virtual int32_t decompress(void* output, int32_t count, off_t offset) override;
+	virtual int32_t decompress(void* output, int32_t count, int64_t offset) override;
 private:
 	virtual int32_t decompress(void* output, int32_t outputBytes);
 	bz_stream m_strm;
@@ -37,7 +37,7 @@ class DMGDecompressor_ADC : public DMGDecompressor
 {
 public:
 	DMGDecompressor_ADC(std::shared_ptr<Reader> reader) : DMGDecompressor(reader) {}
-	virtual int32_t decompress(void* output, int32_t count, off_t offset) override;
+	virtual int32_t decompress(void* output, int32_t count, int64_t offset) override;
 };
 
 DMGDecompressor::DMGDecompressor(std::shared_ptr<Reader> reader)
@@ -130,7 +130,7 @@ int32_t DMGDecompressor_Zlib::decompress(void* output, int32_t outputBytes)
 	return done;
 }
 
-int32_t DMGDecompressor_Zlib::decompress(void* output, int32_t count, off_t offset)
+int32_t DMGDecompressor_Zlib::decompress(void* output, int32_t count, int64_t offset)
 {
 	int32_t done = 0;
 	
@@ -141,7 +141,7 @@ int32_t DMGDecompressor_Zlib::decompress(void* output, int32_t count, off_t offs
 	while (offset > 0)
 	{
 		char waste[4096];
-		int32_t to_read = std::min(off_t(sizeof(waste)), offset);
+		int32_t to_read = std::min(int64_t(sizeof(waste)), offset);
 		int32_t bytesDecompressed = decompress(waste, to_read);
 		if (bytesDecompressed != to_read) {
 //printf("dec != to_read %d %d\n", bytesDecompressed, to_read);
@@ -207,7 +207,7 @@ int32_t DMGDecompressor_Bzip2::decompress(void* output, int32_t outputBytes)
 	return done;
 }
 
-int32_t DMGDecompressor_Bzip2::decompress(void* output, int32_t count, off_t offset)
+int32_t DMGDecompressor_Bzip2::decompress(void* output, int32_t count, int64_t offset)
 {
 	int32_t done = 0;
 	
@@ -218,7 +218,7 @@ int32_t DMGDecompressor_Bzip2::decompress(void* output, int32_t count, off_t off
 	while (offset > 0)
 	{
 		char waste[4096];
-		int32_t to_read = std::min(off_t(sizeof(waste)), offset);
+		int32_t to_read = std::min(int64_t(sizeof(waste)), offset);
 		int32_t bytesDecompressed = decompress(waste, to_read);
 		// bytesDecompressed seems to be always equal to to_read
 		assert(bytesDecompressed == to_read);
@@ -228,7 +228,7 @@ int32_t DMGDecompressor_Bzip2::decompress(void* output, int32_t count, off_t off
 	return done;
 }
 
-int32_t DMGDecompressor_ADC::decompress(void* output, int32_t count, off_t offset)
+int32_t DMGDecompressor_ADC::decompress(void* output, int32_t count, int64_t offset)
 {
 	if (offset < 0)
 		throw io_error("offset < 0");
