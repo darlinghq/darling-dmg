@@ -117,6 +117,10 @@ int32_t DMGPartition::readRun(void* buf, int32_t runIndex, uint64_t offsetInSect
 		case RunType::Zlib:
 		case RunType::Bzip2:
 		case RunType::ADC:
+		case RunType::LZFSE:
+#ifndef COMPILE_WITH_LZFSE
+			throw function_not_implemented_error("LZFSE is not yet supported");
+#endif
 		{
 			std::unique_ptr<DMGDecompressor> decompressor;
 			std::shared_ptr<Reader> subReader;

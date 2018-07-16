@@ -83,6 +83,7 @@ enum class RunType : uint32_t
 	ADC = 0x80000004,
 	Zlib = 0x80000005,
 	Bzip2 = 0x80000006,
+	LZFSE = 0x80000007,
 	Comment = 0x7ffffffe,
 	Terminator = 0xffffffff
 };

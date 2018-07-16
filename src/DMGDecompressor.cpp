@@ -1,6 +1,9 @@
 #include "DMGDecompressor.h"
 #include <zlib.h>
 #include <bzlib.h>
+#ifdef COMPILE_WITH_LZFSE
+	#include <lzfse.h>
+#endif
 #include "adc.h"
 #include <cstring>
 #include <memory>
@@ -40,6 +43,15 @@ public:
 	virtual int32_t decompress(void* output, int32_t count, int64_t offset) override;
 };
 
+class DMGDecompressor_LZFSE : public DMGDecompressor
+{
+public:
+	DMGDecompressor_LZFSE(std::shared_ptr<Reader> reader) : DMGDecompressor(reader) {}
+	virtual int32_t decompress(void* output, int32_t count, int64_t offset) override;
+private:
+	virtual int32_t decompress(void* output, int32_t outputBytes);
+};
+
 DMGDecompressor::DMGDecompressor(std::shared_ptr<Reader> reader)
 	: m_reader(reader), m_pos(0)
 {
@@ -55,6 +67,10 @@ DMGDecompressor* DMGDecompressor::create(RunType runType, std::shared_ptr<Reader
 			return new DMGDecompressor_Bzip2(reader);
 		case RunType::ADC:
 			return new DMGDecompressor_ADC(reader);
+#ifdef COMPILE_WITH_LZFSE
+		case RunType::LZFSE:
+			return new DMGDecompressor_LZFSE(reader);
+#endif
 		default:
 			return nullptr;
 	}
@@ -276,3 +292,74 @@ int32_t DMGDecompressor_ADC::decompress(void* output, int32_t count, int64_t off
 	return count;
 }
 
+#ifdef COMPILE_WITH_LZFSE
+
+int32_t DMGDecompressor_LZFSE::decompress(void* output, int32_t outputBytes)
+{
+	// DMGDecompressor can only read by 8k while compressed length of a LZFSE block can be much bigger
+
+	int32_t done = 0;
+	char* input = nullptr;
+	char *inputBig = nullptr;
+	
+	int inputBytes = readSome(&input);
+
+	const uint64_t readerTotalSize = readerLength();
+
+	if (inputBytes < readerTotalSize)
+	{
+		inputBig = new char[readerTotalSize];
+		memcpy(inputBig, input, inputBytes);
+
+		processed(inputBytes);
+
+		do
+		{
+			int nextReadBytes = readSome(&input);
+			
+			memcpy(inputBig + inputBytes, input, nextReadBytes);
+
+			inputBytes += nextReadBytes;
+
+			processed(nextReadBytes);
+		} 
+		while (inputBytes < readerTotalSize);
+
+		input = inputBig;
+	}
+
+	size_t out_size = lzfse_decode_buffer((uint8_t *)output, outputBytes, (const uint8_t *)input, inputBytes, nullptr);
+
+	if (out_size == 0)
+		throw io_error("DMGDecompressor_LZFSE failed");
+
+	if (inputBig)
+		delete[] inputBig;
+	else
+		processed(inputBytes);
+	
+	return out_size;
+}
+
+int32_t DMGDecompressor_LZFSE::decompress(void* output, int32_t count, int64_t offset)
+{
+	int32_t done = 0;
+
+#ifdef DEBUG
+	std::cout << "lzfse: Asked to provide " << outputBytes << " bytes\n";
+#endif
+
+	while (offset > 0)
+	{
+		char waste[4096];
+		int32_t to_read = std::min(int64_t(sizeof(waste)), offset);
+		int32_t bytesDecompressed = decompress(waste, to_read);
+		// bytesDecompressed seems to be always equal to to_read
+		assert(bytesDecompressed == to_read);
+		offset -= bytesDecompressed;
+	}
+	done = decompress(output, count);
+	return done;
+}
+
+#endif
