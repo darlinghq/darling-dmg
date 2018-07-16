@@ -11,6 +11,7 @@ protected:
 	DMGDecompressor(std::shared_ptr<Reader> reader);
 	int readSome(char** ptr);
 	void processed(int bytes);
+	uint64_t readerLength() const { return m_reader->length(); }
 public:
 	virtual ~DMGDecompressor() {}
 	virtual int32_t decompress(void* output, int32_t count, int64_t offset) = 0;
