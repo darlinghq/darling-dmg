@@ -154,9 +154,6 @@ int HFSCatalogBTree::listDirectory(const std::string& path, std::map<std::string
 
 		memcpy(&native, it->second, sizeof(native));
 
-//#if __BYTE_ORDER == __LITTLE_ENDIAN
-//		fixEndian(native);
-//#endif
 		/* Filter out :
 		 * - "\0\0\0\0HFS+ Private Data" (truth is, every filename whose first char is \0 will be filtered out)
 		 * - ".HFS+ Private Directory Data\r"
@@ -271,11 +268,6 @@ int HFSCatalogBTree::stat(std::string path, HFSPlusCatalogFileOrFolder* s)
 	}
 
 	memcpy(s, last, sizeof(*s));
-//
-//#if __BYTE_ORDER == __LITTLE_ENDIAN
-//	if (!noByteSwap)
-//		fixEndian(*s);
-//#endif
 	
 	//std::cout << "File/folder flags: 0x" << std::hex << s->file.flags << std::endl;
 
@@ -345,46 +337,6 @@ void HFSCatalogBTree::findRecordForParentAndName(const HFSBTreeNode& leafNode, H
 		}
 	}
 }
-
-
-//void HFSCatalogBTree::fixEndian(HFSPlusCatalogFileOrFolder& ff)
-//{
-//#define swap(x) ff.folder.x = be(ff.folder.x)
-//	ff.folder.recordType = RecordType(be(uint16_t(ff.folder.recordType)));
-//	swap(flags);
-//	swap(valence);
-//	swap(folderID);
-//	swap(createDate);
-//	swap(contentModDate);
-//	swap(attributeModDate);
-//	swap(accessDate);
-//	swap(backupDate);
-//	swap(textEncoding);
-//	swap(reserved);
-//	swap(permissions.ownerID);
-//	swap(permissions.groupID);
-//	swap(permissions.fileMode);
-//	//swap(permissions.adminFlags);
-//	//swap(permissions.ownerFlags);
-//	swap(permissions.special.rawDevice);
-//
-//#undef swap
-//#define swap(x) ff.file.x = be(ff.file.x)
-//
-//	swap(userInfo.fileCreator);
-//	swap(userInfo.fileType);
-//	if (ff.file.recordType == RecordType::kHFSPlusFileRecord)
-//	{
-//		swap(dataFork.logicalSize);
-//		swap(dataFork.clumpSize);
-//		swap(dataFork.totalBlocks);
-//
-//		swap(resourceFork.logicalSize);
-//		swap(resourceFork.clumpSize);
-//		swap(resourceFork.totalBlocks);
-//	}
-//#undef swap
-//}
 
 time_t HFSCatalogBTree::appleToUnixTime(uint32_t apple)
 {
