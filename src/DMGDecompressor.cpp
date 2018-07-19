@@ -151,7 +151,7 @@ int32_t DMGDecompressor_Zlib::decompress(void* output, int32_t count, int64_t of
 	int32_t done = 0;
 	
 #ifdef DEBUG
-	std::cout << "zlib: Asked to provide " << outputBytes << " bytes\n";
+	std::cout << "zlib: Asked to provide " << count << " bytes\n";
 #endif
 
 	while (offset > 0)
@@ -159,9 +159,8 @@ int32_t DMGDecompressor_Zlib::decompress(void* output, int32_t count, int64_t of
 		char waste[4096];
 		int32_t to_read = std::min(int64_t(sizeof(waste)), offset);
 		int32_t bytesDecompressed = decompress(waste, to_read);
-		if (bytesDecompressed != to_read) {
-//printf("dec != to_read %d %d\n", bytesDecompressed, to_read);
-		}
+		if (bytesDecompressed < 0) // Error while decompressing
+			return bytesDecompressed;
 		offset -= bytesDecompressed;
 	}
 	done = decompress(output, count);
@@ -228,7 +227,7 @@ int32_t DMGDecompressor_Bzip2::decompress(void* output, int32_t count, int64_t o
 	int32_t done = 0;
 	
 #ifdef DEBUG
-	std::cout << "bz2: Asked to provide " << outputBytes << " bytes\n";
+	std::cout << "bz2: Asked to provide " << count << " bytes\n";
 #endif
 
 	while (offset > 0)
@@ -236,8 +235,9 @@ int32_t DMGDecompressor_Bzip2::decompress(void* output, int32_t count, int64_t o
 		char waste[4096];
 		int32_t to_read = std::min(int64_t(sizeof(waste)), offset);
 		int32_t bytesDecompressed = decompress(waste, to_read);
-		// bytesDecompressed seems to be always equal to to_read
-		assert(bytesDecompressed == to_read);
+		// bytesDecompressed do NOT always returns to_read bytes decompressed. Sometimes, its less.
+		if (bytesDecompressed < 0) // Error while decompressing
+			return bytesDecompressed;
 		offset -= bytesDecompressed;
 	}
 	done = decompress(output, count);
@@ -346,7 +346,7 @@ int32_t DMGDecompressor_LZFSE::decompress(void* output, int32_t count, int64_t o
 	int32_t done = 0;
 
 #ifdef DEBUG
-	std::cout << "lzfse: Asked to provide " << outputBytes << " bytes\n";
+	std::cout << "lzfse: Asked to provide " << count << " bytes\n";
 #endif
 
 	while (offset > 0)
