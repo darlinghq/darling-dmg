@@ -12,7 +12,7 @@ HFSAttributeBTree::HFSAttributeBTree(std::shared_ptr<HFSFork> fork, CacheZone* z
 std::map<std::string, std::vector<uint8_t>> HFSAttributeBTree::getattr(HFSCatalogNodeID cnid)
 {
 	HFSPlusAttributeKey key;
-	std::vector<HFSBTreeNode> leaves;
+	std::vector<std::shared_ptr<HFSBTreeNode>> leaves;
 	std::map<std::string, std::vector<uint8_t>> rv;
 
 	memset(&key, 0, sizeof(key));
@@ -20,8 +20,9 @@ std::map<std::string, std::vector<uint8_t>> HFSAttributeBTree::getattr(HFSCatalo
 
 	leaves = findLeafNodes((Key*) &key, cnidComparator);
 	
-	for (const HFSBTreeNode& leaf : leaves)
+	for (std::shared_ptr<HFSBTreeNode> leafPtr : leaves)
 	{
+		HFSBTreeNode& leaf = *leafPtr;
 		for (int i = 0; i < leaf.recordCount(); i++)
 		{
 			HFSPlusAttributeKey* recordKey = leaf.getRecordKey<HFSPlusAttributeKey>(i);
@@ -51,7 +52,7 @@ std::map<std::string, std::vector<uint8_t>> HFSAttributeBTree::getattr(HFSCatalo
 bool HFSAttributeBTree::getattr(HFSCatalogNodeID cnid, const std::string& attrName, std::vector<uint8_t>& dataOut)
 {
 	HFSPlusAttributeKey key;
-	HFSBTreeNode leafNode;
+	std::shared_ptr<HFSBTreeNode> leafNodePtr;
 	UnicodeString ucAttrName = UnicodeString::fromUTF8(attrName);
 	
 	memset(&key, 0, sizeof(key));
@@ -60,7 +61,8 @@ bool HFSAttributeBTree::getattr(HFSCatalogNodeID cnid, const std::string& attrNa
 	key.attrNameLength = StringToUnichar(attrName, key.attrName, sizeof(key.attrName));
 	key.attrNameLength = htobe16(key.attrNameLength);
 	
-	leafNode = findLeafNode((Key*) &key, cnidAttrComparator);
+	leafNodePtr = findLeafNode((Key*) &key, cnidAttrComparator);
+	HFSBTreeNode& leafNode = *leafNodePtr;
 	if (leafNode.isInvalid())
 		return false;
 	
