@@ -21,7 +21,7 @@ public:
 	~DMGDecompressor_Zlib();
 	virtual int32_t decompress(void* output, int32_t count, int64_t offset) override;
 private:
-	virtual int32_t decompress(void* output, int32_t outputBytes);
+	virtual int32_t decompress(void* output, int32_t count);
 	z_stream m_strm;
 };
 
@@ -32,7 +32,7 @@ public:
 	~DMGDecompressor_Bzip2();
 	virtual int32_t decompress(void* output, int32_t count, int64_t offset) override;
 private:
-	virtual int32_t decompress(void* output, int32_t outputBytes);
+	virtual int32_t decompress(void* output, int32_t count);
 	bz_stream m_strm;
 };
 
@@ -92,7 +92,7 @@ void DMGDecompressor::processed(int bytes)
 	m_pos += bytes;
 
 #ifdef DEBUG
-	std::cout << "Processed: " << bytes << ", total: " << m_pos << std::endl;
+	//std::cout << "Processed: " << bytes << ", total: " << m_pos << std::endl;
 #endif
 }
 
@@ -109,41 +109,40 @@ DMGDecompressor_Zlib::~DMGDecompressor_Zlib()
 	inflateEnd(&m_strm);
 }
 
-int32_t DMGDecompressor_Zlib::decompress(void* output, int32_t outputBytes)
+int32_t DMGDecompressor_Zlib::decompress(void* output, int32_t count)
 {
 	int status;
 	char* input;
-	int inputBytes;
-	int32_t done = 0;
+	int bytesRead;
+	
+#ifdef DEBUG
+	//std::cout << "zlib: Asked to provide " << outputBytes << " bytes\n";
+#endif
 
+	m_strm.next_out = (uint8_t*) output;
+	m_strm.avail_out = count;
 	do
 	{
-		inputBytes = readSome(&input);
-	
-		m_strm.next_in = (Bytef*) input;
-		m_strm.next_out = (Bytef*) output + done;
-		m_strm.avail_in = inputBytes;
-		m_strm.avail_out = outputBytes - done;
-	
-		//std::cout << "ZLIB decompressor supplying " << inputBytes << " bytes\n";
-		//std::cout << "Buffer is at " << (void*)m_strm.next_in << std::endl;
+		if (m_strm.avail_in == 0)
+		{
+			bytesRead = readSome(&input);
+			if (bytesRead <= 0)
+				throw io_error("Error reading zlib stream");
+			processed(bytesRead);
+			m_strm.next_in = (uint8_t*)input;
+			m_strm.avail_in = (uint)bytesRead;
+		}
 	
 		status = inflate(&m_strm, Z_SYNC_FLUSH);
-
-		processed(inputBytes - m_strm.avail_in);
-		done += outputBytes - m_strm.avail_out;
-
-		//std::cout << m_strm.avail_in << " bytes left\n";
-		//std::cout << "status = " << status << std::endl;
-
+		
 		if (status == Z_STREAM_END)
-			break;
+			return count - m_strm.avail_out;
 		else if (status < 0)
 			return status;
 	}
-	while (done == 0);
+	while (m_strm.avail_out > 0);
 
-	return done;
+	return count;
 }
 
 int32_t DMGDecompressor_Zlib::decompress(void* output, int32_t count, int64_t offset)
@@ -159,12 +158,12 @@ int32_t DMGDecompressor_Zlib::decompress(void* output, int32_t count, int64_t of
 		char waste[4096];
 		int32_t to_read = std::min(int64_t(sizeof(waste)), offset);
 		int32_t bytesDecompressed = decompress(waste, to_read);
-		if (bytesDecompressed < 0) // Error while decompressing
+		if (bytesDecompressed <= 0)
 			return bytesDecompressed;
 		offset -= bytesDecompressed;
 	}
-	done = decompress(output, count);
-	return done;
+	int32_t bytesDecompressed = decompress((uint8_t*)output+done, count);
+	return bytesDecompressed;
 }
 
 DMGDecompressor_Bzip2::DMGDecompressor_Bzip2(std::shared_ptr<Reader> reader)
@@ -180,46 +179,40 @@ DMGDecompressor_Bzip2::~DMGDecompressor_Bzip2()
 	BZ2_bzDecompressEnd(&m_strm);
 }
 
-int32_t DMGDecompressor_Bzip2::decompress(void* output, int32_t outputBytes)
+int32_t DMGDecompressor_Bzip2::decompress(void* output, int32_t count)
 {
 	int status;
 	char* input;
-	int inputBytes;
-	int32_t done = 0;
+	int bytesRead;
 	
 #ifdef DEBUG
-	std::cout << "bz2: Asked to provide " << outputBytes << " bytes\n";
+	//std::cout << "bz2: Asked to provide " << outputBytes << " bytes\n";
 #endif
 
+	m_strm.next_out = (char*) output;
+	m_strm.avail_out = count;
 	do
 	{
-		inputBytes = readSome(&input);
-
-		m_strm.next_in = (char*) input;
-		m_strm.next_out = (char*) output + done;
-		m_strm.avail_in = inputBytes;
-		m_strm.avail_out = outputBytes - done;
-	
-		//std::cout << "Bzip2 decompressor supplying " << inputBytes << " bytes\n";
-		//std::cout << "Bzip2 output buffer is " << outputBytes-done << " bytes long\n";
+		if (m_strm.avail_in == 0)
+		{
+			bytesRead = readSome(&input);
+			if (bytesRead <= 0)
+				throw io_error("Error reading bz2 stream");
+			processed(bytesRead);
+			m_strm.next_in = input;
+			m_strm.avail_in = (uint)bytesRead;
+		}
 	
 		status = BZ2_bzDecompress(&m_strm);
-
-		processed(inputBytes - m_strm.avail_in);
-		done += outputBytes - m_strm.avail_out;
-
-		//std::cout << m_strm.avail_in << " bytes left in input\n";
-		//std::cout << "bzip2: status = " << status << std::endl;
-		//std::cout << "bzip2: avail_out = " << m_strm.avail_out << std::endl;
 
 		if (status == BZ_STREAM_END)
 			break;
 		else if (status < 0)
 			return status;
 	}
-	while (done == 0);
+	while (m_strm.avail_out > 0);
 
-	return done;
+	return count;
 }
 
 int32_t DMGDecompressor_Bzip2::decompress(void* output, int32_t count, int64_t offset)
@@ -227,7 +220,7 @@ int32_t DMGDecompressor_Bzip2::decompress(void* output, int32_t count, int64_t o
 	int32_t done = 0;
 	
 #ifdef DEBUG
-	std::cout << "bz2: Asked to provide " << count << " bytes\n";
+	//std::cout << "bz2: Asked to provide " << outputBytes << " bytes\n";
 #endif
 
 	while (offset > 0)
@@ -235,13 +228,12 @@ int32_t DMGDecompressor_Bzip2::decompress(void* output, int32_t count, int64_t o
 		char waste[4096];
 		int32_t to_read = std::min(int64_t(sizeof(waste)), offset);
 		int32_t bytesDecompressed = decompress(waste, to_read);
-		// bytesDecompressed do NOT always returns to_read bytes decompressed. Sometimes, its less.
-		if (bytesDecompressed < 0) // Error while decompressing
+		if (bytesDecompressed <= 0)
 			return bytesDecompressed;
 		offset -= bytesDecompressed;
 	}
-	done = decompress(output, count);
-	return done;
+	int32_t bytesDecompressed = decompress((uint8_t*)output, count);
+	return bytesDecompressed;
 }
 
 int32_t DMGDecompressor_ADC::decompress(void* output, int32_t count, int64_t offset)
