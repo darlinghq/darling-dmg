@@ -130,7 +130,7 @@ int32_t DMGDecompressor_Zlib::decompress(void* output, int32_t count)
 				throw io_error("Error reading zlib stream");
 			processed(bytesRead);
 			m_strm.next_in = (uint8_t*)input;
-			m_strm.avail_in = (uint)bytesRead;
+			m_strm.avail_in = (uint32_t)bytesRead;
 		}
 	
 		status = inflate(&m_strm, Z_SYNC_FLUSH);
@@ -200,7 +200,7 @@ int32_t DMGDecompressor_Bzip2::decompress(void* output, int32_t count)
 				throw io_error("Error reading bz2 stream");
 			processed(bytesRead);
 			m_strm.next_in = input;
-			m_strm.avail_in = (uint)bytesRead;
+			m_strm.avail_in = (uint32_t)bytesRead;
 		}
 	
 		status = BZ2_bzDecompress(&m_strm);
