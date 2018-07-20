@@ -1,9 +1,10 @@
 #include "HFSCatalogBTree.h"
 #include "be.h"
+#include "exceptions.h"
 #include <unicode/unistr.h>
+#include "unichar.h"
 #include <sstream>
 #include <cstring>
-#include "unichar.h"
 using icu::UnicodeString;
 static const int MAX_SYMLINKS = 50;
 
@@ -118,14 +119,13 @@ int HFSCatalogBTree::idOnlyComparator(const Key* indexKey, const Key* desiredKey
 		return 0;
 }
 
-int HFSCatalogBTree::listDirectory(const std::string& path, std::map<std::string, HFSPlusCatalogFileOrFolder>& contents)
+int HFSCatalogBTree::listDirectory(const std::string& path, std::map<std::string, std::shared_ptr<HFSPlusCatalogFileOrFolder>>& contents)
 {
 	HFSPlusCatalogFileOrFolder dir;
 	int rv;
-	RecordType recType;
-	std::vector<HFSBTreeNode> leaves;
+	std::vector<std::shared_ptr<HFSBTreeNode>> leaves;
 	HFSPlusCatalogKey key;
-	std::map<std::string, HFSPlusCatalogFileOrFolder*> beContents;
+	std::map<std::string, std::shared_ptr<HFSPlusCatalogFileOrFolder>> beContents;
 
 	contents.clear();
 
@@ -141,18 +141,15 @@ int HFSCatalogBTree::listDirectory(const std::string& path, std::map<std::string
 	key.parentID = dir.folder.folderID;
 	leaves = findLeafNodes((Key*) &key, idOnlyComparator);
 
-	for (const HFSBTreeNode& leaf : leaves)
+	for (std::shared_ptr<HFSBTreeNode> leafPtr : leaves)
 	{
 		//std::cerr << "**** Looking for elems with CNID " << be(key.parentID) << std::endl;
-		findRecordForParentAndName(leaf, be(key.parentID), beContents);
+		 appendNameAndHFSPlusCatalogFileOrFolderFromLeafForParentId(leafPtr, be(key.parentID), beContents);
 	}
 
 	for (auto it = beContents.begin(); it != beContents.end(); it++)
 	{
-		HFSPlusCatalogFileOrFolder native;
 		std::string filename = it->first;
-
-		memcpy(&native, it->second, sizeof(native));
 
 		/* Filter out :
 		 * - "\0\0\0\0HFS+ Private Data" (truth is, every filename whose first char is \0 will be filtered out)
@@ -164,7 +161,7 @@ int HFSCatalogBTree::listDirectory(const std::string& path, std::map<std::string
 		if (be(dir.folder.folderID) != kHFSRootFolderID  ||  (filename[0]!=0  &&  filename.compare(".HFS+ Private Directory Data\r")!=0  &&  filename.compare(".journal")!=0  &&  filename.compare(".journal_info_block")!=0))
 		{
 			replaceChars(filename, '/', ':'); // Issue #36: / and : have swapped meaning in HFS+
-			contents[filename] = native;
+			contents[filename] = it->second;
 		}
 	}
 
@@ -180,9 +177,9 @@ static void split(const std::string &s, char delim, std::vector<std::string>& el
 		elems.push_back(item);
 }
 
-HFSBTreeNode HFSCatalogBTree::findHFSBTreeNodeForParentIdAndName(HFSCatalogNodeID parentID, const std::string &elem)
+std::shared_ptr<HFSBTreeNode> HFSCatalogBTree::findHFSBTreeNodeForParentIdAndName(HFSCatalogNodeID parentID, const std::string &elem)
 {
-	HFSBTreeNode leafNode;
+	std::shared_ptr<HFSBTreeNode> leafPtr;
 	
 	HFSPlusCatalogKey desiredKey;
 	
@@ -192,16 +189,35 @@ HFSBTreeNode HFSCatalogBTree::findHFSBTreeNodeForParentIdAndName(HFSCatalogNodeI
 	
 	desiredKey.parentID = htobe32(parentID);
 	
-	leafNode = findLeafNode((Key*) &desiredKey, isCaseSensitive() ? caseSensitiveComparator : caseInsensitiveComparator);
-	return leafNode;
+	leafPtr = findLeafNode((Key*) &desiredKey, isCaseSensitive() ? caseSensitiveComparator : caseInsensitiveComparator);
+	return leafPtr;
+}
+
+std::shared_ptr<HFSPlusCatalogFileOrFolder> HFSCatalogBTree::findHFSPlusCatalogFileOrFolderForParentIdAndName(HFSCatalogNodeID parentID, const std::string &elem)
+{
+	HFSPlusCatalogKey key;
+	key.parentID = htobe32(parentID);
+	std::vector<std::shared_ptr<HFSBTreeNode>> leaves;
+	leaves = findLeafNodes((Key*) &key, idOnlyComparator);
+	std::map<std::string, std::shared_ptr<HFSPlusCatalogFileOrFolder>> beContents;
+	for (std::shared_ptr<HFSBTreeNode> leafPtr : leaves)
+	{
+		//std::cerr << "**** Looking for elems with CNID " << be(key.parentID) << std::endl;
+		appendNameAndHFSPlusCatalogFileOrFolderFromLeafForParentIdAndName(leafPtr, be(key.parentID), elem, beContents);
+	}
+	if (beContents.size() == 0)
+		return nullptr;
+	if (beContents.size() > 1)
+		throw io_error("Multiple records with same name");
+	
+	return beContents.begin()->second;
 }
 
 int HFSCatalogBTree::stat(std::string path, HFSPlusCatalogFileOrFolder* s)
 {
 	std::vector<std::string> elems;
-	HFSBTreeNode leafNode;
-	//HFSCatalogNodeID parent = kHFSRootParentID;
-	HFSPlusCatalogFileOrFolder* last = nullptr;
+	std::shared_ptr<HFSBTreeNode> leafNodePtr;
+	std::shared_ptr<HFSPlusCatalogFileOrFolder> last = nullptr;
 
 	memset(s, 0, sizeof(*s));
 
@@ -222,11 +238,9 @@ int HFSCatalogBTree::stat(std::string path, HFSPlusCatalogFileOrFolder* s)
 
 		//if (ustr.length() > 255) // FIXME: there is a UCS-2 vs UTF-16 issue here!
 		//	return -ENAMETOOLONG;
-		leafNode = findHFSBTreeNodeForParentIdAndName(parentID, elem);
-		if (leafNode.isInvalid())
-			return -ENOENT;
-		last = findRecordForParentAndName(leafNode, parentID, elem);
-		if (!last)
+
+		last = findHFSPlusCatalogFileOrFolderForParentIdAndName(parentID, elem);
+		if (last==nullptr)
 			return -ENOENT;
 
 		// resolve symlinks, check if directory...
@@ -253,49 +267,37 @@ int HFSCatalogBTree::stat(std::string path, HFSPlusCatalogFileOrFolder* s)
 
 		//parent = last->folder.folderID;
 	}
-
-	HFSBTreeNode leafNodeHl;
 	if (be(last->file.userInfo.fileType) == kHardLinkFileType  &&  m_hardLinkDirID != 0) {
 		std::string iNodePath;
 		iNodePath += "iNode";
 		iNodePath += std::to_string(be(last->file.permissions.special.iNodeNum));
-		leafNodeHl = findHFSBTreeNodeForParentIdAndName(m_hardLinkDirID, iNodePath);
-		if (!leafNodeHl.isInvalid()) {
-			HFSPlusCatalogFileOrFolder* ffhl = findRecordForParentAndName(leafNodeHl, m_hardLinkDirID, iNodePath);
-			if (ffhl)
-				last = ffhl;
-		}
+		std::shared_ptr<HFSPlusCatalogFileOrFolder> leafNodeHl = findHFSPlusCatalogFileOrFolderForParentIdAndName(m_hardLinkDirID, iNodePath);
+		if (leafNodeHl!=nullptr)
+			last = leafNodeHl;
 	}
-
-	memcpy(s, last, sizeof(*s));
+	*s = *last;
 	
 	//std::cout << "File/folder flags: 0x" << std::hex << s->file.flags << std::endl;
 
 	return 0;
 }
+extern int mustbreak;
 
-HFSPlusCatalogFileOrFolder* HFSCatalogBTree::findRecordForParentAndName(const HFSBTreeNode& leafNode, HFSCatalogNodeID cnid, const std::string& name)
+void HFSCatalogBTree::appendNameAndHFSPlusCatalogFileOrFolderFromLeafForParentId(std::shared_ptr<HFSBTreeNode> leafNodePtr, HFSCatalogNodeID cnid, std::map<std::string, std::shared_ptr<HFSPlusCatalogFileOrFolder>>& map)
 {
-	std::map<std::string, HFSPlusCatalogFileOrFolder*> result;
-	findRecordForParentAndName(leafNode, cnid, result, name);
-
-	if (result.empty())
-		return nullptr;
-	else
-		return result.begin()->second;
+	appendNameAndHFSPlusCatalogFileOrFolderFromLeafForParentIdAndName(leafNodePtr, cnid, "", map);
 }
 
-void HFSCatalogBTree::findRecordForParentAndName(const HFSBTreeNode& leafNode, HFSCatalogNodeID cnid, std::map<std::string, HFSPlusCatalogFileOrFolder*>& result, const std::string& name)
+void HFSCatalogBTree::appendNameAndHFSPlusCatalogFileOrFolderFromLeafForParentIdAndName(std::shared_ptr<HFSBTreeNode> leafNodePtr, HFSCatalogNodeID cnid, const std::string& name, std::map<std::string, std::shared_ptr<HFSPlusCatalogFileOrFolder>>& map)
 {
-	for (int i = 0; i < leafNode.recordCount(); i++)
+	for (int i = 0; i < leafNodePtr->recordCount(); i++)
 	{
 		HFSPlusCatalogKey* recordKey;
 		HFSPlusCatalogFileOrFolder* ff;
-		uint16_t recordOffset;
 		RecordType recType;
 
-		recordKey = leafNode.getRecordKey<HFSPlusCatalogKey>(i);
-		ff = leafNode.getRecordData<HFSPlusCatalogFileOrFolder>(i);
+		recordKey = leafNodePtr->getRecordKey<HFSPlusCatalogKey>(i);
+		ff = leafNodePtr->getRecordData<HFSPlusCatalogFileOrFolder>(i);
 
 		recType = be(ff->folder.recordType);
 		//{
@@ -324,7 +326,7 @@ void HFSCatalogBTree::findRecordForParentAndName(const HFSBTreeNode& leafNode, H
 					if (equal)
 					{
 						std::string name = UnicharToString(recordKey->nodeName);
-						result[name] = ff;
+						map[name] = std::shared_ptr<HFSPlusCatalogFileOrFolder>(leafNodePtr, ff); // retain leafPtr, act as a HFSPlusCatalogFileOrFolder
 					}
 				}
 				//else
@@ -369,6 +371,9 @@ int HFSCatalogBTree::openFile(const std::string& path, std::shared_ptr<Reader>& 
 	return 0;
 }
 
+
+#ifdef DEBUG
+
 void HFSCatalogBTree::dumpTree() const
 {
 	dumpTree(be(m_header.rootNode), 0);
@@ -377,7 +382,7 @@ void HFSCatalogBTree::dumpTree() const
 void HFSCatalogBTree::dumpTree(int nodeIndex, int depth) const
 {
 	HFSBTreeNode node(m_reader, nodeIndex, be(m_header.nodeSize));
-	
+
 	switch (node.kind())
 	{
 		case NodeKind::kBTIndexNode:
@@ -390,21 +395,21 @@ void HFSCatalogBTree::dumpTree(int nodeIndex, int depth) const
 				std::string str;
 				
 				keyName.toUTF8String(str);
-				
-#ifdef DEBUG
-				std::cout << "dumpTree(i): " << std::string(depth, ' ') << str << "(" << be(key->parentID) << ")\n";
-#endif
-				
+	
 				// recurse down
 				uint32_t* childIndex = node.getRecordData<uint32_t>(i);
-				dumpTree(be(*childIndex), depth+1);
+#ifdef DEBUG
+				printf("Index Node(%4d,%4zd) %s %s(%d) ->child %d\n", nodeIndex, i, std::string(depth, ' ').c_str(), str.c_str(), be(key->parentID), be(*childIndex));
+//				std::cout << "Index node(" << nodeIndex << "): " << std::string(depth, ' ') << str << "(" << be(key->parentID) << ")\n";
+#endif
+				dumpTree(be(*childIndex), depth+2);
 			}
 			
 			break;
 		}
 		case NodeKind::kBTLeafNode:
 		{
-			for (int i = 0; i < node.recordCount(); i++)
+			for (size_t i = 0; i < node.recordCount(); i++)
 			{
 				HFSPlusCatalogKey* recordKey;
 				UErrorCode error = U_ZERO_ERROR;
@@ -416,7 +421,8 @@ void HFSCatalogBTree::dumpTree(int nodeIndex, int depth) const
 				keyName.toUTF8String(str);
 				
 #ifdef DEBUG
-				std::cout << "dumpTree(l): " << std::string(depth, ' ') << str << "(" << be(recordKey->parentID) << ")\n";
+				printf("Leaf Node(%4d,%4zd)  %s %s(%d)\n", nodeIndex, i, std::string(depth, ' ').c_str(), str.c_str(), be(recordKey->parentID));
+//				std::cout << "dumpTree(l): " << std::string(depth, ' ') << str << "(" << be(recordKey->parentID) << ")\n";
 #endif
 			}
 			
@@ -430,6 +436,8 @@ void HFSCatalogBTree::dumpTree(int nodeIndex, int depth) const
 			
 	}
 }
+#endif
+
 void HFSCatalogBTree::replaceChars(std::string& str, char oldChar, char newChar)
 {
 	size_t pos = 0;

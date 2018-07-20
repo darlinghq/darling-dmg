@@ -11,7 +11,7 @@ HFSExtentsOverflowBTree::HFSExtentsOverflowBTree(std::shared_ptr<HFSFork> fork, 
 void HFSExtentsOverflowBTree::findExtentsForFile(HFSCatalogNodeID cnid, bool resourceFork, uint32_t startBlock, std::vector<HFSPlusExtentDescriptor>& extraExtents)
 {
 	HFSPlusExtentKey key;
-	std::vector<HFSBTreeNode> leaves;
+	std::vector<std::shared_ptr<HFSBTreeNode>> leaves;
 	bool first = true;
 
 	key.forkType = resourceFork ? 0xff : 0;
@@ -19,8 +19,9 @@ void HFSExtentsOverflowBTree::findExtentsForFile(HFSCatalogNodeID cnid, bool res
 
 	leaves = findLeafNodes((Key*) &key, cnidComparator);
 
-	for (const HFSBTreeNode& leaf : leaves)
+	for (std::shared_ptr<HFSBTreeNode> leafPtr : leaves)
 	{
+		HFSBTreeNode& leaf = *leafPtr;
 		for (int i = 0; i < leaf.recordCount(); i++)
 		{
 			HFSPlusExtentKey* recordKey = leaf.getRecordKey<HFSPlusExtentKey>(i);

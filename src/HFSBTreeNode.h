@@ -14,22 +14,23 @@ public:
 	HFSBTreeNode()
 	: m_descriptor(nullptr), m_nodeSize(0), m_firstRecordOffset(nullptr)
 	{
-	}
-	
-	HFSBTreeNode(const std::vector<uint8_t>& descriptorData, uint16_t nodeSize)
-	: m_descriptorData(descriptorData), m_nodeSize(nodeSize), m_firstRecordOffset(nullptr)
-	{
-		initFromBuffer();
+		#ifdef DEBUG
+			m_nodeIndex = 0;
+		#endif
 	}
 	
 	HFSBTreeNode(std::shared_ptr<Reader> treeReader, uint32_t nodeIndex, uint16_t nodeSize)
 	: m_nodeSize(nodeSize)
 	{
+		#ifdef DEBUG
+			m_nodeIndex = nodeIndex;
+		#endif
 		m_descriptorData.resize(nodeSize);
 		
-		if (treeReader->read(&m_descriptorData[0], nodeSize, nodeSize*nodeIndex) < nodeSize)
-			throw std::runtime_error("Short read of BTree node");
-		
+		int32_t read = treeReader->read(&m_descriptorData[0], nodeSize, nodeSize*nodeIndex);
+		if (read < nodeSize)
+			throw std::runtime_error("Short read of BTree node. "+std::to_string(read)+" bytes read instead of "+std::to_string(nodeSize));
+
 		initFromBuffer();
 	}
 	
@@ -40,6 +41,9 @@ public:
 	
 	HFSBTreeNode& operator=(const HFSBTreeNode& that)
 	{
+		#ifdef DEBUG
+			m_nodeIndex = that.m_nodeIndex;
+		#endif
 		m_descriptorData = that.m_descriptorData;
 		m_nodeSize = that.m_nodeSize;
 		initFromBuffer();
@@ -194,6 +198,9 @@ private:
 	std::vector<uint8_t> m_descriptorData;
 	uint16_t m_nodeSize;
 	uint16_t* m_firstRecordOffset;
+	#ifdef DEBUG
+		uint32_t m_nodeIndex;
+	#endif
 };
 
 #endif

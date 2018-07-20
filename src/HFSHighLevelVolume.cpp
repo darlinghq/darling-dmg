@@ -37,7 +37,7 @@ static bool string_endsWith(const std::string& str, const std::string& what)
 
 std::map<std::string, struct stat> HFSHighLevelVolume::listDirectory(const std::string& path)
 {
-	std::map<std::string, HFSPlusCatalogFileOrFolder> contents;
+	std::map<std::string, std::shared_ptr<HFSPlusCatalogFileOrFolder>> contents;
 	std::map<std::string, struct stat> rv;
 	int err;
 
@@ -49,7 +49,7 @@ std::map<std::string, struct stat> HFSHighLevelVolume::listDirectory(const std::
 	for (auto it = contents.begin(); it != contents.end(); it++)
 	{
 		struct stat st;
-		hfs_nativeToStat_decmpfs(it->second, &st, string_endsWith(it->first, RESOURCE_FORK_SUFFIX));
+		hfs_nativeToStat_decmpfs(*(it->second), &st, string_endsWith(it->first, RESOURCE_FORK_SUFFIX));
 
 		rv[it->first] = st;
 	}

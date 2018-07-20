@@ -40,52 +40,53 @@ HFSBTree::HFSBTree(std::shared_ptr<HFSFork> fork, CacheZone* zone, const char* c
 	}*/
 }
 
-HFSBTreeNode HFSBTree::findLeafNode(const Key* indexKey, KeyComparator comp, bool wildcard)
+std::shared_ptr<HFSBTreeNode> HFSBTree::findLeafNode(const Key* indexKey, KeyComparator comp, bool wildcard)
 {
 	return traverseTree(be(m_header.rootNode), indexKey, comp, wildcard);
 }
 
-std::vector<HFSBTreeNode> HFSBTree::findLeafNodes(const Key* indexKey, KeyComparator comp)
+std::vector<std::shared_ptr<HFSBTreeNode>> HFSBTree::findLeafNodes(const Key* indexKey, KeyComparator comp)
 {
-	std::vector<HFSBTreeNode> rv;
+	std::vector<std::shared_ptr<HFSBTreeNode>> rv;
 	std::set<uint32_t> uniqLink; // for broken filesystems
-	HFSBTreeNode current = findLeafNode(indexKey, comp, true);
+	std::shared_ptr<HFSBTreeNode> currentPtr = findLeafNode(indexKey, comp, true);
 
-	if (current.isInvalid())
+	if (currentPtr->isInvalid())
 		return rv;
 	
-	rv.push_back(current);
+	rv.push_back(currentPtr);
 
-	while (current.forwardLink() != 0)
+	while (currentPtr->forwardLink() != 0)
 	{
 		Key* key;
 		
-		if (uniqLink.find(current.forwardLink()) != uniqLink.end())
+		if (uniqLink.find(currentPtr->forwardLink()) != uniqLink.end())
 		{
 			std::cerr << "WARNING: forward link loop detected!\n";
 			break;
 		}
 		else
-			uniqLink.insert(current.forwardLink());
+			uniqLink.insert(currentPtr->forwardLink());
 
 		//std::cout << "Testing node " << current.forwardLink() << std::endl;
-		current = HFSBTreeNode(m_reader, current.forwardLink(), current.nodeSize());
+		currentPtr = std::make_shared<HFSBTreeNode>(m_reader, currentPtr->forwardLink(), currentPtr->nodeSize());
 		
-		key = current.getKey<Key>(); // TODO: or the key of the first record?
+		key = currentPtr->getKey<Key>(); // TODO: or the key of the first record?
 
 		if (comp(key, indexKey) > 0)
 			break;
 
-		rv.push_back(current);
+		rv.push_back(currentPtr);
 	}
 
 	return rv;
 }
 
-HFSBTreeNode HFSBTree::traverseTree(int nodeIndex, const Key* indexKey, KeyComparator comp, bool wildcard)
+std::shared_ptr<HFSBTreeNode> HFSBTree::traverseTree(int nodeIndex, const Key* indexKey, KeyComparator comp, bool wildcard)
 {
 	//std::cout << "Examining node " << nodeIndex << std::endl;
-	HFSBTreeNode node(m_reader, nodeIndex, be(m_header.nodeSize));
+	std::shared_ptr<HFSBTreeNode> nodePtr = std::make_shared<HFSBTreeNode>(m_reader, nodeIndex, be(m_header.nodeSize));
+	HFSBTreeNode& node = *nodePtr;
 
 	switch (node.kind())
 	{
@@ -96,7 +97,7 @@ HFSBTreeNode HFSBTree::traverseTree(int nodeIndex, const Key* indexKey, KeyCompa
 
 			if (wildcard)
 			{
-				auto it = std::lower_bound(node.begin<Key>(), node.end<Key>(), indexKey, [=](const Key* keyA, const Key* keyB) {
+				auto it = std::lower_bound(node.begin<Key>(), node.end<Key>(), indexKey, [=](const Key* keyA, const Key* keyB) { // can be equal to keyB
 					return comp(keyA, keyB) < 0;
 				});
 
@@ -104,13 +105,12 @@ HFSBTreeNode HFSBTree::traverseTree(int nodeIndex, const Key* indexKey, KeyCompa
 			}
 			else
 			{
-				auto it = std::upper_bound(node.begin<Key>(), node.end<Key>(), indexKey, [=](const Key* keyA, const Key* keyB) {
+				auto it = std::upper_bound(node.begin<Key>(), node.end<Key>(), indexKey, [=](const Key* keyA, const Key* keyB) { // is > keyB
 					return comp(keyA, keyB) < 0;
 				});
 
 				position = it.index() - 1;
 			}
-			
 			if (position < 0)
 				position = 0;
 			
@@ -121,7 +121,7 @@ HFSBTreeNode HFSBTree::traverseTree(int nodeIndex, const Key* indexKey, KeyCompa
 		}
 		case NodeKind::kBTLeafNode:
 		{
-			return node;
+			return nodePtr;
 		}
 		case NodeKind::kBTHeaderNode:
 		case NodeKind::kBTMapNode:
@@ -130,8 +130,7 @@ HFSBTreeNode HFSBTree::traverseTree(int nodeIndex, const Key* indexKey, KeyCompa
 			std::cerr << "Invalid node kind! Kind: " << int(node.kind()) << std::endl;
 			
 	}
-
-	return HFSBTreeNode();
+	return std::make_shared<HFSBTreeNode>();
 }
 
 /*
