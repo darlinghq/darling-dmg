@@ -21,7 +21,7 @@ static uint64_t findKolyBlock(std::shared_ptr<Reader> reader)
 
 	char buf[1024];
 	reader->read(buf, sizeof(buf), reader->length() - 1024);
-	for (uint32_t i = 0 ; i < 1020 ; i++) {
+	for (uint32_t i = 0 ; i < 1024 - sizeof(UDIFResourceFile) ; i++) {
 		if (strcmp("koly", buf+i) == 0)
 			return reader->length() - 1024 + i;
 	}
