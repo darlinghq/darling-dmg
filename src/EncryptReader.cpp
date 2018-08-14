@@ -85,6 +85,25 @@ struct DmgKeyData
 
 #pragma pack(pop)
 
+bool EncryptReader::isEncrypted(std::shared_ptr<Reader> reader)
+{
+	char data[0x1000];
+	std::vector<uint8_t> kdata;
+
+	const DmgCryptHeaderV2 *hdr;
+	const DmgKeyPointer *keyptr;
+	const DmgKeyData *keydata;
+	uint32_t no_of_keys;
+	uint32_t key_id;
+
+	reader->read(data, sizeof(data), 0);
+
+	assert(sizeof(data) > sizeof(DmgCryptHeaderV2));
+	hdr = reinterpret_cast<const DmgCryptHeaderV2 *>(data);
+
+	return (memcmp(hdr->signature, "encrcdsa", 8) == 0);
+}
+
 bool EncryptReader::SetupEncryptionV2(const char* password)
 {
 	char data[0x1000];
@@ -143,7 +162,7 @@ bool EncryptReader::SetupEncryptionV2(const char* password)
 			throw io_error("internal error (1) during key unwrap operation!");
 		}
 		if(!EVP_DecryptFinal_ex(&ctx, blob + outlen, &tmplen)) {
-			throw io_error("internal error (2) during key unwrap operation!");
+			throw io_error("internal error (2) during key unwrap operation! Wrong password ?");
 		}
 		//outlen += tmplen;
 		EVP_CIPHER_CTX_cleanup(&ctx);

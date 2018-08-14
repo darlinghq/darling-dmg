@@ -33,6 +33,8 @@ along with apfs-fuse.  If not, see <http://www.gnu.org/licenses/>.
 class EncryptReader : public Reader
 {
 public:
+	static bool isEncrypted(std::shared_ptr<Reader> reader);
+
 	EncryptReader(std::shared_ptr<Reader> reader, const char* password);
 	~EncryptReader();
 	

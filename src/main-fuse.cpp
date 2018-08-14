@@ -77,9 +77,10 @@ int main(int argc, const char** argv)
 		std::cerr << std::endl;
 
 		std::cerr << "Possible reasons:\n"
-			"1) The file is corrupt.\n"
-			"2) The file is not really a DMG file, although it resembles one.\n"
-			"3) There is a bug in darling-dmg.\n";
+			"1) Wrong password.\n"
+			"2) The file is corrupt.\n"
+			"3) The file is not really a DMG file, although it resembles one.\n"
+			"4) There is a bug in darling-dmg.\n";
 
 		return 1;
 	}
@@ -99,16 +100,15 @@ void openDisk(const char* path)
 	std::shared_ptr<HFSVolume> volume;
 
 	std::shared_ptr<FileReader> fileReader = std::make_shared<FileReader>(path);
-	try {
+	if (EncryptReader::isEncrypted(fileReader)) {
 		char *password = getpass("Password: ");
 		std::shared_ptr<EncryptReader> encReader = std::make_shared<EncryptReader>(fileReader, password);
 		for ( size_t i = 0 ; i < strlen(password) ; i++ )
 			password[i] = ' ';
         g_fileReader = encReader;
-    }
-    catch(...){
+    }else{
         g_fileReader = fileReader;
-    }
+	}
 
 	if (DMGDisk::isDMG(g_fileReader))
 		g_partitions.reset(new DMGDisk(g_fileReader));
