@@ -22,10 +22,10 @@ along with hdimount.  If not, see <http://www.gnu.org/licenses/>.
 #include <inttypes.h> // for strtoumax
 #include <fcntl.h> // open, read, close...
 #include <arpa/inet.h>
-#include "openssl/sha.h"
-#include "openssl/aes.h"
-#include "openssl/hmac.h"
-#include "openssl/evp.h"
+#include <openssl/sha.h>
+#include <openssl/aes.h>
+#include <openssl/hmac.h>
+#include <openssl/evp.h>
 #if defined(__linux__) || defined(__APPLE__)
 #include <termios.h>
 #endif
