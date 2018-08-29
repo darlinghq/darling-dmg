@@ -12,15 +12,14 @@ class HFSBTreeNode
 {
 public:
 	HFSBTreeNode()
-	: m_descriptor(nullptr), m_nodeSize(0), m_firstRecordOffset(nullptr)
 	{
+		initConveniencePointerFromBuffer();
 		#ifdef DEBUG
 			m_nodeIndex = 0;
 		#endif
 	}
 	
 	HFSBTreeNode(std::shared_ptr<Reader> treeReader, uint32_t nodeIndex, uint16_t nodeSize)
-	: m_nodeSize(nodeSize)
 	{
 		#ifdef DEBUG
 			m_nodeIndex = nodeIndex;
@@ -31,12 +30,12 @@ public:
 		if (read < nodeSize)
 			throw std::runtime_error("Short read of BTree node. "+std::to_string(read)+" bytes read instead of "+std::to_string(nodeSize));
 
-		initFromBuffer();
+		initConveniencePointerFromBuffer();
 	}
 	
 	HFSBTreeNode(const HFSBTreeNode& that)
 	{
-		*this = that;
+		*this = that; // calling assgnment op below
 	}
 	
 	HFSBTreeNode& operator=(const HFSBTreeNode& that)
@@ -45,8 +44,7 @@ public:
 			m_nodeIndex = that.m_nodeIndex;
 		#endif
 		m_descriptorData = that.m_descriptorData;
-		m_nodeSize = that.m_nodeSize;
-		initFromBuffer();
+		initConveniencePointerFromBuffer();
 		return *this;
 	}
 	
@@ -67,7 +65,7 @@ public:
 	
 	uint16_t nodeSize() const
 	{
-		return m_nodeSize;
+		return m_descriptorData.size();
 	}
 	
 	bool isInvalid() const
@@ -188,15 +186,22 @@ private:
 	{
 		return reinterpret_cast<char*>(m_descriptor);
 	}
-	void initFromBuffer()
+	// Initialised convenience pointer from m_descriptorData
+	void initConveniencePointerFromBuffer()
+	{
+		if (m_descriptorData.size()) // required check!
 	{
 		m_descriptor = reinterpret_cast<BTNodeDescriptor*>(&m_descriptorData[0]);
-		m_firstRecordOffset = reinterpret_cast<uint16_t*>(descPtr() + m_nodeSize - sizeof(uint16_t));
+			m_firstRecordOffset = reinterpret_cast<uint16_t*>(descPtr() + m_descriptorData.size() - sizeof(uint16_t));
+		}else{
+			m_descriptor = nullptr;
+			m_firstRecordOffset = nullptr;
+		}
 	}
 private:
-	mutable BTNodeDescriptor* m_descriptor;
 	std::vector<uint8_t> m_descriptorData;
-	uint16_t m_nodeSize;
+	// convenience initialised by initConveniencePointerFromBuffer()
+	mutable BTNodeDescriptor* m_descriptor;
 	uint16_t* m_firstRecordOffset;
 	#ifdef DEBUG
 		uint32_t m_nodeIndex;

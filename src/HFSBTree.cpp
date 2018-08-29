@@ -51,7 +51,7 @@ std::vector<std::shared_ptr<HFSBTreeNode>> HFSBTree::findLeafNodes(const Key* in
 	std::set<uint32_t> uniqLink; // for broken filesystems
 	std::shared_ptr<HFSBTreeNode> currentPtr = findLeafNode(indexKey, comp, true);
 
-	if (currentPtr->isInvalid())
+	if (!currentPtr)
 		return rv;
 	
 	rv.push_back(currentPtr);
@@ -130,7 +130,7 @@ std::shared_ptr<HFSBTreeNode> HFSBTree::traverseTree(int nodeIndex, const Key* i
 			std::cerr << "Invalid node kind! Kind: " << int(node.kind()) << std::endl;
 			
 	}
-	return std::make_shared<HFSBTreeNode>();
+	return nullptr;
 }
 
 /*

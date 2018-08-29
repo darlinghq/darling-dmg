@@ -62,10 +62,10 @@ bool HFSAttributeBTree::getattr(HFSCatalogNodeID cnid, const std::string& attrNa
 	key.attrNameLength = htobe16(key.attrNameLength);
 	
 	leafNodePtr = findLeafNode((Key*) &key, cnidAttrComparator);
-	HFSBTreeNode& leafNode = *leafNodePtr;
-	if (leafNode.isInvalid())
+	if (!leafNodePtr)
 		return false;
 	
+	HFSBTreeNode& leafNode = *leafNodePtr; // convenience
 	for (int i = 0; i < leafNode.recordCount(); i++)
 	{
 		HFSPlusAttributeKey* recordKey = leafNode.getRecordKey<HFSPlusAttributeKey>(i);

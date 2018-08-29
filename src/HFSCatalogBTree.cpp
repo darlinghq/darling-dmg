@@ -177,22 +177,6 @@ static void split(const std::string &s, char delim, std::vector<std::string>& el
 		elems.push_back(item);
 }
 
-std::shared_ptr<HFSBTreeNode> HFSCatalogBTree::findHFSBTreeNodeForParentIdAndName(HFSCatalogNodeID parentID, const std::string &elem)
-{
-	std::shared_ptr<HFSBTreeNode> leafPtr;
-	
-	HFSPlusCatalogKey desiredKey;
-	
-	desiredKey.nodeName.length = StringToUnichar(elem, desiredKey.nodeName.string, sizeof(desiredKey.nodeName.string));
-	//desiredKey.nodeName.length = ustr.extract(0, ustr.length(), (char*) desiredKey.nodeName.string, "UTF-16BE") / 2;
-	desiredKey.nodeName.length = htobe16(desiredKey.nodeName.length);
-	
-	desiredKey.parentID = htobe32(parentID);
-	
-	leafPtr = findLeafNode((Key*) &desiredKey, isCaseSensitive() ? caseSensitiveComparator : caseInsensitiveComparator);
-	return leafPtr;
-}
-
 std::shared_ptr<HFSPlusCatalogFileOrFolder> HFSCatalogBTree::findHFSPlusCatalogFileOrFolderForParentIdAndName(HFSCatalogNodeID parentID, const std::string &elem)
 {
 	HFSPlusCatalogKey key;
