@@ -43,8 +43,6 @@ static int caseInsensitiveComparator(const Key* indexKey, const Key* desiredKey)
 	static void fixEndian(HFSPlusCatalogFileOrFolder& ff);
 	static void replaceChars(std::string& str, char oldChar, char newChar);
 	
-	std::shared_ptr<HFSBTreeNode> findHFSBTreeNodeForParentIdAndName(HFSCatalogNodeID parentID, const std::string &elem);
-
 	void dumpTree(int nodeIndex, int depth) const;
 private:
 	HFSVolume* m_volume;
