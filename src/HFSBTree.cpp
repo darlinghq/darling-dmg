@@ -11,7 +11,7 @@
 #include "CacheZone.h"
 #include "exceptions.h"
 
-HFSBTree::HFSBTree(std::shared_ptr<HFSFork> fork, CacheZone* zone, const char* cacheTag)
+HFSBTree::HFSBTree(std::shared_ptr<HFSFork> fork, std::shared_ptr<CacheZone> zone, const char* cacheTag)
 : m_fork(fork)
 {
 	BTNodeDescriptor desc0;
