@@ -163,7 +163,7 @@ int handle_exceptions(std::function<int()> func)
 	catch (const attribute_not_found_error& e)
 	{
 		std::cerr << e.what() << std::endl;
-		return -ENOATTR;
+		return -ENODATA;
 	}
 	catch (const operation_not_permitted_error& e)
 	{
