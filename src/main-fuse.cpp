@@ -163,7 +163,7 @@ int handle_exceptions(std::function<int()> func)
 	catch (const attribute_not_found_error& e)
 	{
 		std::cerr << e.what() << std::endl;
-		return -ENOATTR;
+		return -ENODATA;
 	}
 	catch (const operation_not_permitted_error& e)
 	{
@@ -283,7 +283,7 @@ int hfs_getxattr(const char* path, const char* name, char* value, size_t vlen)
 #endif
 {
 	std::cerr << "hfs_getxattr(" << path << ", " << name << ")\n";
-#ifdef __APPLE__
+#if defined(__APPLE__) && !defined(DARLING)
 	if (position > 0) return -ENOSYS; // it's not supported... yet. I think it doesn't happen anymore since osx use less ressource fork
 #endif
 
