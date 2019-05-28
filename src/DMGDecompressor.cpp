@@ -273,7 +273,7 @@ int32_t DMGDecompressor_ADC::decompress(void* output, int32_t count, int64_t off
 				// to copy = 0
 				offset -= 0x10000;
 			}
-			memcpy(decrompressBuffer, decrompressBuffer+0x10000, bytes_written - 0x10000);
+			memmove(decrompressBuffer, decrompressBuffer+0x10000, bytes_written - 0x10000); // memory can overlap, so memmove in mandatory
 			restartIndex = bytes_written - 0x10000;
 		}else{
 			restartIndex = bytes_written;
