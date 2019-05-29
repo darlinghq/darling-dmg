@@ -110,8 +110,8 @@ int adc_decompress(int in_size, uint8_t* input, int avail_size, uint8_t* output,
 		if (output_full || input_short)
 			break;
 	}
-	*bytes_written = outp - output;
-	return inp - input;
+	*bytes_written = int(outp - output); // safe cast, outp - output is < avail_size
+	return int(inp - input); // safe cast, inp - input is < in_size
 }
 
 int adc_chunk_type(char _byte)

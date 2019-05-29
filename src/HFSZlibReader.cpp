@@ -17,6 +17,8 @@ HFSZlibReader::HFSZlibReader(std::shared_ptr<Reader> parent, uint64_t uncompress
 	//
 	// Each offset points to the start of a 64 KB block
 	
+	assert(uncompressedSize/RUN_LENGTH <= std::numeric_limits<uint32_t>::max());
+	
 	if (!singleRun)
 	{
 		uint32_t numEntries;
@@ -85,17 +87,17 @@ int32_t HFSZlibReader::readRun(int runIndex, void* buf, int32_t count, uint64_t 
 	// We're skipping forward in the current run. Waste decompress the data in between.
 	if (m_lastEnd < offset)
 	{
-		char waste[512];
+		char waste[512]; // sizeof(waste) has to be < INT_MAX
 		
 		while (m_lastEnd < offset)
 		{
-			int thistime = std::min<uint64_t>(sizeof(waste), offset - m_lastEnd);
+			int thistime = (int)std::min<uint64_t>(sizeof(waste), offset - m_lastEnd); // safe cast if sizeof(waste) < INT_MAX
 			readRun(runIndex, waste, thistime, m_lastEnd);
 		}
 	}
 	
 	// Decompress
-	char inputBuffer[512];
+	char inputBuffer[512]; // sizeof(inputBuffer) has to be < INT_MAX
 	int32_t done = 0;
 	int32_t readCompressedSoFar = 0;
 	
@@ -106,7 +108,7 @@ int32_t HFSZlibReader::readRun(int runIndex, void* buf, int32_t count, uint64_t 
 		
 		thistime = count - done;
   
-		int thisTimeCompressed = std::min<uint64_t>(m_offsets[runIndex].second-readCompressedSoFar, sizeof(inputBuffer));
+		int thisTimeCompressed = (int)std::min<uint64_t>(m_offsets[runIndex].second-readCompressedSoFar, sizeof(inputBuffer)); // sizeof(inputBuffer) has to be < INT_MAX
 		
 		if (!m_lastUncompressed)
 			read = m_reader->read(inputBuffer, thisTimeCompressed, m_inputPos + m_offsets[runIndex].first);
@@ -118,7 +120,7 @@ int32_t HFSZlibReader::readRun(int runIndex, void* buf, int32_t count, uint64_t 
 			if (!m_lastUncompressed)
 				m_inputPos++;
 			
-			count = std::min<int32_t>(count, m_offsets[runIndex].second - offset - 1);
+			count = (int32_t)std::min<uint64_t>(count, m_offsets[runIndex].second - offset - 1); // safe cast, result of min is < count
 			read = m_reader->read(buf, count, m_inputPos + m_offsets[runIndex].first);
 			m_inputPos += read;
 			
@@ -155,14 +157,18 @@ int32_t HFSZlibReader::read(void* buf, int32_t count, uint64_t offset)
 {
 	int32_t done = 0;
 	
-	if (offset+count > m_uncompressedSize)
-		count = m_uncompressedSize - offset;
+	if ( count < 0 )
+		return -1;
+	if (offset > m_uncompressedSize)
+		return 0;
+	if (count > m_uncompressedSize - offset) // here, offset is >= m_uncompressedSize  =>  m_uncompressedSize-offset >= 0.   (Do not test like ' if (offset+count > m_uncompressedSize) ', offset+count could overflow)
+		count = int32_t(m_uncompressedSize - offset); // here, m_uncompressedSize-offset >= 0 AND < count  =>  m_uncompressedSize-offset < INT32_MAX, cast is safe
 	
 	while (done < count)
 	{
 		uint64_t runOffset = 0;
 		uint32_t thisTime, read;
-		const int runIndex = (offset+done) / RUN_LENGTH;
+		const uint32_t runIndex = uint32_t((offset+done) / RUN_LENGTH); // because of assert in ctor (uncompressedSize/RUN_LENGTH <= UINT32_MAX)
 		
 		// runOffset only relevant in first run
 		if (done == 0)

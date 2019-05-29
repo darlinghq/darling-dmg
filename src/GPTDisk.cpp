@@ -38,7 +38,6 @@ bool GPTDisk::isGPTDisk(std::shared_ptr<Reader> reader)
 std::string GPTDisk::makeGUID(const GPT_GUID& guid)
 {
 	std::stringstream ss;
-	int pos = 0;
 
 	ss << std::hex << std::uppercase;
 	ss << std::setw(8) << std::setfill('0') << guid.data1;

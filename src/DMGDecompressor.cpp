@@ -21,8 +21,8 @@ public:
 	~DMGDecompressor_Zlib();
 	virtual int32_t decompress(void* output, int32_t count, int64_t offset) override;
 private:
-	virtual int32_t decompress(void* output, int32_t count);
 	z_stream m_strm;
+	virtual int32_t decompress(void* output, typeof(m_strm.avail_out) count);
 };
 
 class DMGDecompressor_Bzip2 : public DMGDecompressor
@@ -32,8 +32,8 @@ public:
 	~DMGDecompressor_Bzip2();
 	virtual int32_t decompress(void* output, int32_t count, int64_t offset) override;
 private:
-	virtual int32_t decompress(void* output, int32_t count);
 	bz_stream m_strm;
+	virtual int32_t decompress(void* output, typeof(m_strm.avail_out) count);
 };
 
 class DMGDecompressor_ADC : public DMGDecompressor
@@ -109,7 +109,7 @@ DMGDecompressor_Zlib::~DMGDecompressor_Zlib()
 	inflateEnd(&m_strm);
 }
 
-int32_t DMGDecompressor_Zlib::decompress(void* output, int32_t count)
+int32_t DMGDecompressor_Zlib::decompress(void* output, typeof(m_strm.avail_out) count)
 {
 	int status;
 	char* input;
@@ -147,22 +147,20 @@ int32_t DMGDecompressor_Zlib::decompress(void* output, int32_t count)
 
 int32_t DMGDecompressor_Zlib::decompress(void* output, int32_t count, int64_t offset)
 {
-	int32_t done = 0;
-	
 #ifdef DEBUG
 	std::cout << "zlib: Asked to provide " << count << " bytes\n";
 #endif
 
 	while (offset > 0)
 	{
-		char waste[4096];
-		int32_t to_read = std::min(int64_t(sizeof(waste)), offset);
+		char waste[4096];  // sizeof(waste) has to be < typeof(m_strm.avail_out) MAX
+		int32_t to_read = (typeof(m_strm.avail_out))std::min<uint64_t>(sizeof(waste), offset);  // safe cast if sizeof(waste) < typeof(m_strm.avail_out) MAX
 		int32_t bytesDecompressed = decompress(waste, to_read);
 		if (bytesDecompressed <= 0)
 			return bytesDecompressed;
 		offset -= bytesDecompressed;
 	}
-	int32_t bytesDecompressed = decompress((uint8_t*)output+done, count);
+	int32_t bytesDecompressed = decompress((uint8_t*)output, count);
 	return bytesDecompressed;
 }
 
@@ -179,7 +177,7 @@ DMGDecompressor_Bzip2::~DMGDecompressor_Bzip2()
 	BZ2_bzDecompressEnd(&m_strm);
 }
 
-int32_t DMGDecompressor_Bzip2::decompress(void* output, int32_t count)
+int32_t DMGDecompressor_Bzip2::decompress(void* output, typeof(m_strm.avail_out) count)
 {
 	int status;
 	char* input;
@@ -217,16 +215,14 @@ int32_t DMGDecompressor_Bzip2::decompress(void* output, int32_t count)
 
 int32_t DMGDecompressor_Bzip2::decompress(void* output, int32_t count, int64_t offset)
 {
-	int32_t done = 0;
-	
 #ifdef DEBUG
 	//std::cout << "bz2: Asked to provide " << outputBytes << " bytes\n";
 #endif
 
 	while (offset > 0)
 	{
-		char waste[4096];
-		int32_t to_read = std::min(int64_t(sizeof(waste)), offset);
+		char waste[4096];  // sizeof(waste) has to be < typeof(m_strm.avail_out) MAX
+		int32_t to_read = (typeof(m_strm.avail_out))std::min<uint64_t>(sizeof(waste), offset);  // safe cast if sizeof(waste) < typeof(m_strm.avail_out) MAX
 		int32_t bytesDecompressed = decompress(waste, to_read);
 		if (bytesDecompressed <= 0)
 			return bytesDecompressed;
@@ -290,7 +286,6 @@ int32_t DMGDecompressor_LZFSE::decompress(void* output, int32_t outputBytes)
 {
 	// DMGDecompressor can only read by 8k while compressed length of a LZFSE block can be much bigger
 
-	int32_t done = 0;
 	char* input = nullptr;
 	char *inputBig = nullptr;
 	

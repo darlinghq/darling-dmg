@@ -7,6 +7,7 @@
 #include <algorithm>
 //#include <cstdio>
 #include <iostream>
+#include <limits>
 #include "SubReader.h"
 #include "exceptions.h"
 
@@ -20,12 +21,14 @@ DMGPartition::DMGPartition(std::shared_ptr<Reader> disk, BLKXTable* table)
 		RunType type = RunType(be(m_table->runs[i].type));
 		if (type == RunType::Comment || type == RunType::Terminator)
 			continue;
-		
+#ifdef DEBUG
+		assert(be(m_table->runs[i].sectorCount) <= std::numeric_limits<uint64_t>::max() / SECTOR_SIZE);
+#endif
 		m_sectors[be(m_table->runs[i].sectorStart)] = i;
 		
 #ifdef DEBUG
 		std::cout << "Sector " << i << " has type 0x" << std::hex << uint32_t(type) << std::dec << ", starts at byte "
-			<< be(m_table->runs[i].sectorStart)*512l << ", compressed length: "
+			<< be(m_table->runs[i].sectorStart)*SECTOR_SIZE << ", compressed length: "
 			<< be(m_table->runs[i].compLength) << ", compressed offset: " << be(m_table->runs[i].compOffset) + be(m_table->dataStart) << std::endl;
 #endif
 	}
@@ -61,6 +64,14 @@ void DMGPartition::adviseOptimalBlock(uint64_t offset, uint64_t& blockStart, uin
 
 int32_t DMGPartition::read(void* buf, int32_t count, uint64_t offset)
 {
+
+	if ( count < 0 )
+		return -1;
+	if (offset > length())
+		return 0;
+	if (count > length() - offset) // here, offset is >= length()  =>  length()-offset >= 0.   (Do not test like ' if (count+offset > length()) ', risk of overflow)
+		count = int32_t(length() - offset); // here, length()-offset >= 0 AND < count  =>  length()-offset < INT32_MAX, cast is safe
+
 	int32_t done = 0;
 	
 	while (done < count)
@@ -95,10 +106,15 @@ int32_t DMGPartition::read(void* buf, int32_t count, uint64_t offset)
 
 int32_t DMGPartition::readRun(void* buf, int32_t runIndex, uint64_t offsetInSector, int32_t count)
 {
+	// readRun is private. Assuming count is > 0
 	BLKXRun* run = &m_table->runs[runIndex];
 	RunType runType = RunType(be(run->type));
 	
-	count = std::min<uint64_t>(count, uint64_t(be(run->sectorCount))*512 - offsetInSector);
+	uint64_t compLength = be(run->sectorCount)*SECTOR_SIZE; // no overflow because assert in ctor
+	if ( offsetInSector > compLength )
+		return 0;
+
+	count = (int32_t)std::min<uint64_t>(count, compLength - offsetInSector); // safe cast, result of min is < count.
 	
 #ifdef DEBUG
 	std::cout << "readRun(): runIndex = " << runIndex << ", offsetInSector = " << offsetInSector << ", count = " << count << std::endl;
@@ -130,12 +146,6 @@ int32_t DMGPartition::readRun(void* buf, int32_t runIndex, uint64_t offsetInSect
 			
 			if (!decompressor)
 				throw std::logic_error("DMGDecompressor::create() returned nullptr!");
-
-			unsigned long long int compLength = be(run->sectorCount)*512;
-			if ( offsetInSector > compLength )
-				return 0;
-			if ( offsetInSector + count > compLength )
-				count = compLength - offsetInSector;
 
 			int32_t dec = decompressor->decompress((uint8_t*)buf, count, offsetInSector);
 			if (dec < count)

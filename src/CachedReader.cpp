@@ -22,14 +22,18 @@ int32_t CachedReader::read(void* buf, int32_t count, uint64_t offset)
 	std::cout << "CachedReader::read(): offset=" << offset << ", count=" << count << std::endl;
 #endif
 
-	if (count+offset > length())
-		count = length() - offset;
+	if ( count < 0 )
+		return -1;
+	if (offset > length())
+		return 0;
+	if (count > length() - offset) // here, offset is >= length()  =>  length()-offset >= 0.   (Do not test like ' if (count+offset > length()) ', risk of overflow)
+		count = int32_t(length() - offset); // here, length()-offset >= 0 AND < count  =>  length()-offset < INT32_MAX, cast is safe
 	
 	while (done < count)
 	{
 		int32_t thistime = std::min<int32_t>(count - done, CacheZone::BLOCK_SIZE);
 		uint64_t blockNumber = (offset+done) / CacheZone::BLOCK_SIZE;
-		uint64_t blockOffset = 0;
+		int32_t blockOffset = 0;
 		size_t fromCache;
 		
 		if (done == 0) // this may also happen when cache doesn't contain a full block, but not on a R/O filesystem
@@ -84,6 +88,8 @@ int32_t CachedReader::read(void* buf, int32_t count, uint64_t offset)
 
 void CachedReader::nonCachedRead(void* buf, int32_t count, uint64_t offset)
 {
+	// nonCachedRead is private. Checks on count, offfset and length() are already made.
+	
 	uint64_t blockStart, blockEnd;
 	std::unique_ptr<uint8_t[]> optimalBlockBuffer;
 	uint32_t optimalBlockBufferSize = 0;
@@ -105,7 +111,7 @@ void CachedReader::nonCachedRead(void* buf, int32_t count, uint64_t offset)
 		if (blockEnd - blockStart > std::numeric_limits<int32_t>::max())
 			throw std::logic_error("Range returned by adviseOptimalBlock() is too large");
 
-		thistime = blockEnd-blockStart;
+		thistime = int32_t(blockEnd-blockStart); // safe cast, because of the 2 checks above.
 		if (thistime > optimalBlockBufferSize)
 		{
 			optimalBlockBufferSize = thistime;
@@ -113,7 +119,7 @@ void CachedReader::nonCachedRead(void* buf, int32_t count, uint64_t offset)
 		}
 
 #ifdef DEBUG
-		std::cout << "Reading from backing reader: offset=" << blockStart << ", count=" << thistime << std::endl;
+//		std::cout << "Reading from backing reader: offset=" << blockStart << ", count=" << thistime << std::endl;
 #endif
 		rd = m_reader->read(optimalBlockBuffer.get(), thistime, blockStart);
 
@@ -137,12 +143,12 @@ void CachedReader::nonCachedRead(void* buf, int32_t count, uint64_t offset)
 		uint32_t toCopy;
 
 		if (readPos > blockStart)
-			optimalOffset = readPos - blockStart;
-		outputOffset = readPos - offset;
-		toCopy = std::min<uint32_t>(offset+count - readPos, thistime - optimalOffset);
+			optimalOffset = uint32_t(readPos - blockStart); // safe cast, readPos is > blockStart
+		outputOffset = uint32_t(readPos - offset); // safe cast, readPos is > offset
+		toCopy = std::min<uint32_t>(uint32_t(offset+count - readPos), thistime - optimalOffset);
 
 #ifdef DEBUG
-		std::cout << "Copying " << toCopy << " bytes into output buffer at offset " << outputOffset << " from internal offset " << optimalOffset << std::endl;
+//		std::cout << "Copying " << toCopy << " bytes into output buffer at offset " << outputOffset << " from internal offset " << optimalOffset << std::endl;
 #endif
 		// if (toCopy+optimalOffset > thistime)
 		// 	throw std::logic_error("Internal error");
