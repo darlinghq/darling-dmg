@@ -116,7 +116,7 @@ else (NOT DARLING)
 	include(darling_exe)
 	include(FindPkgConfig)
 
-	add_definitions(-D_FILE_OFFSET_BITS=64)
+	add_definitions(-D_FILE_OFFSET_BITS=64 -DCOMPILE_WITH_LZFSE=1)
 
 	pkg_check_modules(FUSE REQUIRED fuse)
 
@@ -142,7 +142,7 @@ else (NOT DARLING)
 		src/main-hdiutil.cpp
 	)
 
-	target_link_libraries(hdiutil fuse icucore z bz2 crypto098 xml2 iconv elfloader)
+	target_link_libraries(hdiutil fuse icucore z bz2 crypto098 xml2 iconv elfloader lzfse)
 	install(TARGETS hdiutil DESTINATION libexec/darling/usr/bin)
 
 endif (NOT DARLING)
