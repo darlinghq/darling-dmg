@@ -43,6 +43,11 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH}
 add_definitions(-D_FILE_OFFSET_BITS=64)
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -ggdb -O0")
 
+if(${CMAKE_SYSTEM_NAME} MATCHES FreeBSD)
+	include_directories("/usr/local/include")
+	link_directories("/usr/local/lib")
+endif()
+
 include(FindLibxml2)
 
 find_package(Libxml2 REQUIRED)
