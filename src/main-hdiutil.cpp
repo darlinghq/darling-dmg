@@ -21,6 +21,8 @@ static int doAttach(int argc, char** argv);
 static int doDetach(int argc, char** argv);
 static void addFusermountIntoPath();
 
+extern "C" int __darling_vchroot_expand(const char* path, char* out);
+
 int main(int argc, char** argv)
 {
 	if (argc < 2)
@@ -102,7 +104,11 @@ static int doAttach(int argc, char** argv)
 
 	args[0] = "darling-dmg";
 	args[1] = dmg.c_str();
-	args[2] = mount.c_str();
+
+	char linux_path[4096];
+	__darling_vchroot_expand(mount.c_str(), linux_path);
+	args[2] = linux_path;
+
 	args[3] = "-f"; // Fork has to be done by Darling code, otherwise the LKM will not talk to us any more
 	args[4] = nullptr;
 
