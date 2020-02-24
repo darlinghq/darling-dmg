@@ -112,8 +112,6 @@ static int doAttach(int argc, char** argv)
 
 	if (optind != argc-1)
 	{
-		std::cerr << "Optind is " << optind << std::endl;
-		std::cerr << "Arg at optind is " << argv[optind] << std::endl;
 		printHelp();
 	}
 
@@ -127,7 +125,7 @@ static int doAttach(int argc, char** argv)
 
 	p = strrchr(argv[optind], '/');
 	if (p == nullptr)
-		p = argv[2];
+		p = argv[optind];
 	else
 		p++;
 
