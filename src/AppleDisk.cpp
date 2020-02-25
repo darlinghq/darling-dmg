@@ -76,9 +76,15 @@ void AppleDisk::load(std::shared_ptr<Reader> readerPM)
 			offset = i*blockSize;
 		
 		if (!readerPM)
-			m_reader->read(&dpme, sizeof(dpme), offset);
+		{
+			if (m_reader->read(&dpme, sizeof(dpme), offset) != sizeof(dpme))
+				break;
+		}
 		else
-			readerPM->read(&dpme, sizeof(dpme), offset);
+		{
+			if (readerPM->read(&dpme, sizeof(dpme), offset) != sizeof(dpme))
+				break;
+		}
 		
 		if (be(dpme.dpme_signature) != DPME_SIGNATURE)
 			continue;

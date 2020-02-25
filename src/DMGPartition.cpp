@@ -69,7 +69,7 @@ int32_t DMGPartition::read(void* buf, int32_t count, uint64_t offset)
 		uint64_t offsetInSector = 0;
 		int32_t thistime;
 
-		if (offset+done > length())
+		if (offset+done >= length())
 			break; // read beyond EOF
 		
 		if (itRun == m_sectors.begin())
