@@ -43,9 +43,9 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH}
 add_definitions(-D_FILE_OFFSET_BITS=64)
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -ggdb -O0")
 
-include(FindLibxml2)
+include(FindLibXml2)
 
-find_package(Libxml2 REQUIRED)
+find_package(LibXml2 REQUIRED)
 include_directories(${LIBXML2_INCLUDE_DIR})
 
 if (WITH_TESTS)
