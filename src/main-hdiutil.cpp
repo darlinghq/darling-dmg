@@ -152,7 +152,7 @@ static int doAttach(int argc, char** argv)
 
 	if (access(dmg.c_str(), R_OK) != 0)
 	{
-		std::cerr << "Cannot access " << argv[2] << std::endl;
+		std::cerr << "Cannot access " << dmg.c_str() << std::endl;
 		return 1;
 	}
 
