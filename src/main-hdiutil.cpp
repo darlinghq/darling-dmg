@@ -52,6 +52,7 @@ static void printHelp()
 
 static std::string g_mountDir;
 static bool puppetstrings = false;
+static bool plist = false;
 
 static int doAttach(int argc, char** argv)
 {
@@ -65,6 +66,10 @@ static int doAttach(int argc, char** argv)
 		{ "quiet", no_argument, NULL, 4 },
 		{ "nobrowse", no_argument, NULL, 5 },
 		{ "noautoopen", no_argument, NULL, 5 },
+		{ "mountrandom", required_argument, NULL, 6 },
+		{ "plist", no_argument, NULL, 7 },
+		{ "readonly", no_argument, NULL, 8 },
+		{ "noidme", no_argument, NULL, 9 },
 		{ NULL, 0, NULL, 0 }
 	};
 
@@ -101,6 +106,34 @@ static int doAttach(int argc, char** argv)
 				break;
 			case 5:
 				// We don't implement opening Finder yet, so this is our default
+				break;
+			case 6: {
+				size_t opt_len = strlen(optarg);
+				bool append_slash = optarg[opt_len - 1] != '/';
+				size_t template_len = opt_len + 6 + (append_slash ? 1 : 0);
+				char* template_string = new char[template_len + 1];
+				strcpy(template_string, optarg);
+				if (append_slash)
+					template_string[opt_len] = '/';
+				for (size_t i = 0; i < 6; ++i)
+					template_string[opt_len + i + (append_slash ? 1 : 0)] = 'X';
+				template_string[template_len] = '\0';
+				if (!mkdtemp(template_string)) {
+					delete[] template_string;
+					std::cerr << "Failed to create temporary directory" << std::endl;
+					return 1;
+				}
+				mount = std::string(template_string);
+				delete[] template_string;
+			} break;
+			case 7:
+				plist = true;
+				break;
+			case 8:
+				// readonly is already enforced by default
+				break;
+			case 9:
+				// IDME (download post-processing) is not supported anyways, so this option does nothing
 				break;
 			case 0:
 				break;
@@ -203,10 +236,43 @@ static int doAttach(int argc, char** argv)
 
 static void printMount()
 {
-	if (!puppetstrings)
+	if (plist) {
+		std::cout << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" << std::endl;
+		std::cout << "<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">" << std::endl;
+		std::cout << "<plist version=\"1.0\">" << std::endl;
+		std::cout << "<dict>" << std::endl;
+		std::cout << "\t<key>system-entities</key>" << std::endl;
+		std::cout << "\t<array>" << std::endl;
+		std::cout << "\t\t<dict>" << std::endl;
+    std::cout << "\t\t\t<key>content-hint</key>" << std::endl;
+    std::cout << "\t\t\t<string>GUID_partition_scheme</string>" << std::endl;
+    std::cout << "\t\t\t<key>dev-entry</key>" << std::endl;
+    std::cout << "\t\t\t<string>/dev/disk1</string>" << std::endl;
+    std::cout << "\t\t\t<key>potentially-mountable</key>" << std::endl;
+    std::cout << "\t\t\t<false/>" << std::endl;
+    std::cout << "\t\t\t<key>unmapped-content-hint</key>" << std::endl;
+    std::cout << "\t\t\t<string>GUID_partition_scheme</string>" << std::endl;
+    std::cout << "\t\t</dict>" << std::endl;
+		std::cout << "\t\t<dict>" << std::endl;
+		std::cout << "\t\t\t<key>content-hint</key>" << std::endl;
+		std::cout << "\t\t\t<string>Apple_HFS</string>" << std::endl;
+		std::cout << "\t\t\t<key>dev-entry</key>" << std::endl;
+		std::cout << "\t\t\t<string>/dev/disk1s1</string>" << std::endl;
+		std::cout << "\t\t\t<key>mount-point</key>" << std::endl;
+		std::cout << "\t\t\t<string>" << g_mountDir << "</string>" << std::endl;
+		std::cout << "\t\t\t<key>potentially-mountable</key>" << std::endl;
+		std::cout << "\t\t\t<true/>" << std::endl;
+		std::cout << "\t\t\t<key>unmapped-content-hint</key>" << std::endl;
+		std::cout << "\t\t\t<string>48465300-0000-11AA-AA11-00306543ECAC</string>" << std::endl;
+		std::cout << "\t\t\t<key>volume-kind</key>" << std::endl;
+		std::cout << "\t\t\t<string>hfs</string>" << std::endl;
+		std::cout << "\t\t</dict>" << std::endl;
+		std::cout << "\t</array>" << std::endl;
+		std::cout << "</dict>" << std::endl;
+		std::cout << "</plist>" << std::endl;
+	} else if (!puppetstrings) {
 		std::cout << g_mountDir << std::endl;
-	else
-	{
+	} else {
 		// FIXME: This is kind of fake...
 		// puppetstrings should produce output like:
 		// /dev/disk1              GUID_partition_scheme           
