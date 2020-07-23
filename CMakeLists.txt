@@ -122,8 +122,6 @@ else (NOT DARLING)
 
 	include_directories(
 		${FUSE_INCLUDE_DIRS}
-		${CMAKE_SOURCE_DIR}/src/external/icu/icuSources/common
-		${CMAKE_SOURCE_DIR}/src/external/openssl/src/include
 	)
 
 	SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -nostdinc")
@@ -135,7 +133,7 @@ else (NOT DARLING)
 		src/main-hdiutil.cpp
 	)
 
-	target_link_libraries(hdiutil fuse icucore z bz2 crypto098 xml2 iconv elfloader lzfse)
+	target_link_libraries(hdiutil fuse icucore z bz2 crypto44 xml2 iconv elfloader lzfse)
 	install(TARGETS hdiutil DESTINATION libexec/darling/usr/bin)
 
 endif (NOT DARLING)
