@@ -3,8 +3,7 @@
 #include "be.h"
 #include <iostream>
 #include <cstring>
-#include <openssl/bio.h>
-#include <openssl/evp.h>
+#include <ctype.h>
 #include <memory>
 #include <sstream>
 #include "DMGPartition.h"
@@ -201,24 +200,70 @@ BLKXTable* DMGDisk::loadBLKXTableForPartition(int index)
 	return rv;
 }
 
+static inline bool is_base64(uint8_t c) {
+	return (isalnum(c) || (c == '+') || (c == '/'));
+}
+
 bool DMGDisk::base64Decode(const std::string& input, std::vector<uint8_t>& output)
 {
-	BIO *b64, *bmem;
-	std::unique_ptr<char[]> buffer(new char[input.length()]);
-	int rd;
-
-	b64 = BIO_new(BIO_f_base64());
-	bmem = BIO_new_mem_buf((void*) input.c_str(), input.length());
-	bmem = BIO_push(b64, bmem);
-	//BIO_set_flags(bmem, BIO_FLAGS_BASE64_NO_NL);
+	static const std::string base64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 	
-	rd = BIO_read(bmem, buffer.get(), input.length());
+	const int in_len_const = input.size();
+	int in_len = input.size();
+	int i = 0;
+	int j = 0;
+	int in_ = 0;
+	uint8_t char_array_4[4], char_array_3[3];
 	
-	if (rd > 0)
-		output.assign(buffer.get(), buffer.get()+rd);
+	while (in_len-- && (input[in_] != '='))
+	{
+		while (!is_base64(input[in_])) // this loop skips non base64 characters
+		{
+			if (in_ < in_len_const - 1)
+			{
+				in_++;
+				continue;
+			}
+			else 
+				break;
+		}
 
-	BIO_free_all(bmem);
-	return rd >= 0;
+		if (in_ == in_len_const - 1)
+			break;
+
+		char_array_4[i++] = input[in_]; in_++;
+		if (i == 4) 
+		{
+			for (i = 0; i < 4; i++)
+				char_array_4[i] = base64_chars.find(char_array_4[i]);
+
+			char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
+			char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
+			char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
+
+			for (i = 0; (i < 3); i++)
+				output.push_back(char_array_3[i]);
+			i = 0;
+		}
+	}
+
+	if (i) 
+	{
+		for (j = i; j < 4; j++)
+			char_array_4[j] = 0;
+
+		for (j = 0; j < 4; j++)
+			char_array_4[j] = base64_chars.find(char_array_4[j]);
+
+		char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
+		char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
+		char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
+
+		for (j = 0; (j < i - 1); j++) 
+			output.push_back(char_array_3[j]);
+	}
+
+	return (output.size() > 0);
 }
 
 std::shared_ptr<Reader> DMGDisk::readerForPartition(int index)
