@@ -43,16 +43,18 @@ void HFSFork::loadFromOverflowsFile(uint32_t blocksSoFar)
 int32_t HFSFork::read(void* buf, int32_t count, uint64_t offset)
 {
 	const auto blockSize = be(m_volume->m_header.blockSize);
-	const uint32_t firstBlock = offset / blockSize;
+	const uint64_t firstBlock = offset / blockSize;
 	uint32_t blocksSoFar;
 	int firstExtent, extent;
 	uint32_t read = 0;
 	uint64_t offsetInExtent;
 	
+	if ( count < 0 )
+		return -1;
 	if (offset > be(m_fork.logicalSize))
 		count = 0;
-	else if (offset+count > be(m_fork.logicalSize))
-		count = be(m_fork.logicalSize) - offset;
+	else if (count > be(m_fork.logicalSize) - offset) // here, offset is >= be(m_fork.logicalSize)  =>  be(m_fork.logicalSize)-offset >= 0.   (Do not test like ' if (offset+count > be(m_fork.logicalSize)) ', offset+count could overflow)
+		count = int32_t(be(m_fork.logicalSize) - offset);// here, be(m_fork.logicalSize)-offset >= 0 AND < count  =>  be(m_fork.logicalSize)-offset < INT32_MAX, cast is safe
 	
 	if (!count)
 		return 0;
@@ -95,7 +97,7 @@ int32_t HFSFork::read(void* buf, int32_t count, uint64_t offset)
 		if (extent >= m_extents.size())
 			loadFromOverflowsFile(blocksSoFar);
 		
-		thistime = std::min<int64_t>(m_extents[extent].blockCount * uint64_t(blockSize) - offsetInExtent, count-read);
+		thistime = (int32_t)std::min<int64_t>(m_extents[extent].blockCount * uint64_t(blockSize) - offsetInExtent, count-read); // safe cast, result of min is < count - read, which is < count.
 		
 		if (thistime == 0)
 			throw std::logic_error("Internal error: thistime == 0");

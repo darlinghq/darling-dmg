@@ -7,10 +7,12 @@ SubReader::SubReader(std::shared_ptr<Reader> parent, uint64_t offset, uint64_t s
 
 int32_t SubReader::read(void* buf, int32_t count, uint64_t offset)
 {
+	if ( count < 0 )
+		return -1;
 	if (offset > m_size)
 		return 0;
-	if (offset+count > m_size)
-		count = m_size - offset;
+	if (count > m_size - offset) // here, offset is >= m_size  =>  m_size-offset >= 0
+		count = int32_t(m_size - offset); // here, m_size-offset >= 0 AND < count  =>  m_size-offset < INT32_MAX, cast is safe
 	
 	return m_parent->read(buf, count, offset + m_offset);
 }

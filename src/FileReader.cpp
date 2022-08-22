@@ -34,7 +34,7 @@ int32_t FileReader::read(void* buf, int32_t count, uint64_t offset)
 	
 	static_assert(sizeof(off_t) == 8, "off_t is too small");
 	
-	return ::pread(m_fd, buf, count, offset);
+	return (int32_t)::pread(m_fd, buf, count, offset); // safe cast, pread returned value is < count
 }
 
 uint64_t FileReader::length()

@@ -8,6 +8,7 @@
 #include "exceptions.h"
 #include "decmpfs.h"
 #include <assert.h>
+#include <limits>
 
 static const char* RESOURCE_FORK_SUFFIX = "#..namedfork#rsrc";
 static const char* XATTR_RESOURCE_FORK = "com.apple.ResourceFork";
@@ -267,11 +268,12 @@ std::vector<uint8_t> HFSHighLevelVolume::getXattr(const std::string& path, const
 			
 		if (file->length() == 0)
 			throw attribute_not_found_error();
+		if (file->length() > std::numeric_limits<int>::max())
+			throw io_error("Attribute too big");
 
-		rv = std::min<int>(std::numeric_limits<int>::max(), file->length());
-		output.resize(rv);
+		output.resize(file->length());
 
-		file->read(&output[0], rv, 0);
+		file->read(&output[0], int32_t(file->length()), 0);
 	}
 	else if (name == XATTR_FINDER_INFO)
 	{
