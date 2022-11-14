@@ -68,7 +68,7 @@ void DMGDisk::loadKoly(const UDIFResourceFile& koly)
 
 	// select all partition dictionaries with partition ID >= 0
 	xpathObj = xmlXPathEvalExpression((const xmlChar*) "/plist/dict/key[text()='resource-fork']/following-sibling::dict[1]/key[text()='blkx']"
-			"/following-sibling::array[1]/dict[key[text()='ID']/following-sibling::string[text() >= 0]]", xpathContext);
+			"/following-sibling::array[1]/dict[key[text()='ID']/following-sibling::string[1][text() >= 0]]", xpathContext);
 
 	if (xpathObj && xpathObj->nodesetval)
 		simpleWayOK = loadPartitionElements(xpathContext, xpathObj->nodesetval);
