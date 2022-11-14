@@ -207,13 +207,15 @@ bool DMGDisk::base64Decode(const std::string& input, std::vector<uint8_t>& outpu
 	std::unique_ptr<char[]> buffer(new char[input.length()]);
 	int rd;
 
+    auto b64_input = input.substr(0, input.find_last_not_of("\r\t\f\v"));
+
 	b64 = BIO_new(BIO_f_base64());
-	bmem = BIO_new_mem_buf((void*) input.c_str(), input.length());
+	bmem = BIO_new_mem_buf((void*) b64_input.c_str(), b64_input.length());
 	bmem = BIO_push(b64, bmem);
 	//BIO_set_flags(bmem, BIO_FLAGS_BASE64_NO_NL);
-	
-	rd = BIO_read(bmem, buffer.get(), input.length());
-	
+
+	rd = BIO_read(bmem, buffer.get(), b64_input.length());
+
 	if (rd > 0)
 		output.assign(buffer.get(), buffer.get()+rd);
 
@@ -266,4 +268,3 @@ std::shared_ptr<Reader> DMGDisk::readerForKolyBlock(int index)
 		return nullptr;
 	return std::shared_ptr<Reader>(new DMGPartition(m_reader, table));
 }
-
