@@ -20,7 +20,25 @@ Read only access only.
 
 ## Build Requirements
 
-You need the development packages for following libraries: fuse, icu, openssl, zlib, bzip2.
+`darling-dmg` requires a C++11-capable compiler, CMake >3.10 and `make` alongside its dependencies. Below are common ways to install them.
+
+On Fedora (and derivatives):
+
+```bash
+sudo dnf install fuse-devel bzip2-devel libicu-devel libxml2-devel openssl-devel zlib-devel pkgconf
+```
+
+On Debian (and derivatives):
+
+```bash
+sudo apt-get install libfuse-dev libbz2-dev libicu-dev libxml2-dev libssl-dev libz-dev pkg-config
+```
+
+On Alpine Linux:
+
+```bash
+sudo apk add fuse-dev bzip2-dev icu-dev libxml2-dev openssl-dev zlib-dev pkgconf
+```
 
 ## Usage
 
