@@ -16,7 +16,19 @@ Read only access only.
 
 ## Build Requirements
 
-`darling-dmg` requires a C++11-capable compiler, CMake >3.10 and `make` alongside its dependencies. Below are common ways to install them.
+| Dependency | Required version     | Notes                              |
+|------------|----------------------|------------------------------------|
+| GCC/Clang  | >5 (GCC), >3 (Clang) | Compiler with C++11 support        |
+| CMake      | 3.10                 | Build system                       |
+| pkg-config |                      | Library-agnostic package detection |
+| OpenSSL    |                      | Base64 decoding                    |
+| Bzip2      |                      | Decompression                      |
+| Zlib       |                      | Decompression                      |
+| FUSE       | 2.x (not 3.x)        | Userspace filesystem support       |
+| libicu     |                      | Unicode support                    |
+| libxml2    |                      | XML (property list) parsing        |
+
+`darling-dmg` requires a C++11-capable compiler, CMake >3.10 and `make` alongside the remaining dependencies mentioned above. Below are common ways to install library dependencies.
 
 On Fedora (and derivatives):
 
