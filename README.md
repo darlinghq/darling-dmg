@@ -24,7 +24,9 @@ You need the development packages for following libraries: fuse, icu, openssl, z
 
 ## Usage
 
-    darling-dmg <file-to-mount> <where-to-mount> [FUSE arguments]
+```
+darling-dmg <file-to-mount> <where-to-mount> [FUSE arguments]
+```
 
 ### Accessing resource forks
 
