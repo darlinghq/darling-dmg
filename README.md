@@ -1,9 +1,5 @@
 # darling-dmg
 
-<a href="http://teamcity.dolezel.info/viewType.html?buildTypeId=DarlingDmg_Build&guest=1">
-<img src="http://teamcity.dolezel.info/app/rest/builds/buildType:(id:DarlingDmg_Build)/statusIcon"/>
-</a>
-
 This project allows ordinary users to directly mount OS X disk images under Linux via FUSE. darling-dmg is part of Darling - http://www.darlinghq.org
 
 Without darling-dmg, the only way to do this would be to manually extract the DMG file, become root and mount the HFS+ filesystem as root. This is slow, wasteful and may even crash your system. The project's author has seen the Linux HFS+ implementation cause kernel crashes.
