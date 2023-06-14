@@ -1,9 +1,5 @@
 # darling-dmg
 
-<a href="http://teamcity.dolezel.info/viewType.html?buildTypeId=DarlingDmg_Build&guest=1">
-<img src="http://teamcity.dolezel.info/app/rest/builds/buildType:(id:DarlingDmg_Build)/statusIcon"/>
-</a>
-
 This project allows ordinary users to directly mount OS X disk images under Linux via FUSE. darling-dmg is part of Darling - http://www.darlinghq.org
 
 Without darling-dmg, the only way to do this would be to manually extract the DMG file, become root and mount the HFS+ filesystem as root. This is slow, wasteful and may even crash your system. The project's author has seen the Linux HFS+ implementation cause kernel crashes.
@@ -20,11 +16,43 @@ Read only access only.
 
 ## Build Requirements
 
-You need the development packages for following libraries: fuse, icu, openssl, zlib, bzip2.
+| Dependency | Required version     | Notes                              |
+|------------|----------------------|------------------------------------|
+| GCC/Clang  | >5 (GCC), >3 (Clang) | Compiler with C++11 support        |
+| CMake      | 3.10                 | Build system                       |
+| pkg-config |                      | Library-agnostic package detection |
+| OpenSSL    |                      | Base64 decoding                    |
+| Bzip2      |                      | Decompression                      |
+| Zlib       |                      | Decompression                      |
+| FUSE       | 2.x (not 3.x)        | Userspace filesystem support       |
+| libicu     |                      | Unicode support                    |
+| libxml2    |                      | XML (property list) parsing        |
+
+`darling-dmg` requires a C++11-capable compiler, CMake >3.10 and `make` alongside the remaining dependencies mentioned above. Below are common ways to install library dependencies.
+
+On Fedora (and derivatives):
+
+```bash
+sudo dnf install fuse-devel bzip2-devel libicu-devel libxml2-devel openssl-devel zlib-devel pkgconf
+```
+
+On Debian (and derivatives):
+
+```bash
+sudo apt-get install libfuse-dev libbz2-dev libicu-dev libxml2-dev libssl-dev libz-dev pkg-config
+```
+
+On Alpine Linux:
+
+```bash
+sudo apk add fuse-dev bzip2-dev icu-dev libxml2-dev openssl-dev zlib-dev pkgconf
+```
 
 ## Usage
 
-    darling-dmg <file-to-mount> <where-to-mount> [FUSE arguments]
+```
+darling-dmg <file-to-mount> <where-to-mount> [FUSE arguments]
+```
 
 ### Accessing resource forks
 
