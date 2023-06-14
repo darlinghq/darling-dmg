@@ -1,6 +1,6 @@
-project(darling-dmg)
-
 cmake_minimum_required(VERSION 3.10)
+
+project(darling-dmg)
 
 set(dmg_sources
 	src/unichar.cpp
