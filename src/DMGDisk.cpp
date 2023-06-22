@@ -14,6 +14,9 @@
 #include "SubReader.h"
 #include "exceptions.h"
 
+#include <libxml/parser.h>
+#include <libxml/xpath.h>
+
 DMGDisk::DMGDisk(std::shared_ptr<Reader> reader)
 	: m_reader(reader), m_zone(40000)
 {
