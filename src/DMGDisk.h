@@ -1,11 +1,19 @@
 #ifndef DMGDISK_H
 #define DMGDISK_H
+
 #include "PartitionedDisk.h"
 #include "Reader.h"
 #include "dmg.h"
 #include "CacheZone.h"
-#include <libxml/parser.h>
-#include <libxml/xpath.h>
+
+struct _xmlDoc;
+typedef struct _xmlDoc xmlDoc;
+
+struct _xmlXPathContext;
+typedef struct _xmlXPathContext xmlXPathContext;
+
+struct _xmlNodeSet;
+typedef struct _xmlNodeSet xmlNodeSet;
 
 class DMGDisk : public PartitionedDisk
 {
@@ -19,7 +27,7 @@ public:
 	static bool isDMG(std::shared_ptr<Reader> reader);
 private:
 	void loadKoly(const UDIFResourceFile& koly);
-	bool loadPartitionElements(xmlXPathContextPtr xpathContext, xmlNodeSetPtr nodes);
+	bool loadPartitionElements(xmlXPathContext* xpathContext, xmlNodeSet* nodes);
 	static bool parseNameAndType(const std::string& nameAndType, std::string& name, std::string& type);
 	static bool base64Decode(const std::string& input, std::vector<uint8_t>& output);
 	BLKXTable* loadBLKXTableForPartition(int index);
@@ -28,7 +36,7 @@ private:
 	std::shared_ptr<Reader> m_reader;
 	std::vector<Partition> m_partitions;
 	UDIFResourceFile m_udif;
-	xmlDocPtr m_kolyXML;
+	xmlDoc* m_kolyXML;
 	CacheZone m_zone;
 };
 
