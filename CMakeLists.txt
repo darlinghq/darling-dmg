@@ -1,44 +1,45 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.12)
 
 project(darling-dmg)
 
-set(dmg_sources
-	src/unichar.cpp
-	src/Reader.cpp
-	src/FileReader.cpp
-	src/HFSVolume.cpp
-	src/AppleDisk.cpp
-	src/SubReader.cpp
-	src/HFSBTree.cpp
-	src/HFSFork.cpp
-	src/HFSCatalogBTree.cpp
-	src/HFSExtentsOverflowBTree.cpp
-	src/HFSAttributeBTree.cpp
-
-	src/DMGDisk.cpp
-	src/DMGPartition.cpp
-	src/DMGDecompressor.cpp
-	src/adc.cpp
-	src/HFSZlibReader.cpp
-	src/MemoryReader.cpp
-
-	src/GPTDisk.cpp
-	
-	src/MacBinary.cpp
-	src/ResourceFork.cpp
-	src/CacheZone.cpp
-	src/CachedReader.cpp
-
-	src/HFSHighLevelVolume.cpp
+set(
+  CMAKE_MODULE_PATH
+    ${CMAKE_MODULE_PATH}
+	"${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/"
 )
 
+set(
+	SOURCES
+	"adc.cpp"
+	"AppleDisk.cpp"
+	"CacheZone.cpp"
+	"CachedReader.cpp"
+	"DMGDecompressor.cpp"
+	"DMGDisk.cpp"
+	"DMGPartition.cpp"
+	"FileReader.cpp"
+	"GPTDisk.cpp"
+	"HFSAttributeBTree.cpp"
+	"HFSBTree.cpp"
+	"HFSCatalogBTree.cpp"
+	"HFSExtentsOverflowBTree.cpp"
+	"HFSFork.cpp"
+	"HFSHighLevelVolume.cpp"
+	"HFSVolume.cpp"
+	"HFSZlibReader.cpp"
+	"MacBinary.cpp"
+	"MemoryReader.cpp"
+	"Reader.cpp"
+	"ResourceFork.cpp"
+	"unichar.cpp"
+	"SubReader.cpp"
+)
+
+list(TRANSFORM SOURCES PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/src/")
 
 # This part of CMakeLists.txt is for when building darling-dmg
 # as a standalone FUSE module outside of Darling.
 if (NOT DARLING)
-
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH}
-	"${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/")
 
 add_definitions(-D_FILE_OFFSET_BITS=64)
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -ggdb -O0")
@@ -67,35 +68,8 @@ if (WITH_TESTS)
 	add_test(NAME CacheTest COMMAND CacheTest)
 endif (WITH_TESTS)
 
-add_library(dmg SHARED
-	src/unichar.cpp
-	src/Reader.cpp
-	src/FileReader.cpp
-	src/HFSVolume.cpp
-	src/AppleDisk.cpp
-	src/SubReader.cpp
-	src/HFSBTree.cpp
-	src/HFSFork.cpp
-	src/HFSCatalogBTree.cpp
-	src/HFSExtentsOverflowBTree.cpp
-	src/HFSAttributeBTree.cpp
-
-	src/DMGDisk.cpp
-	src/DMGPartition.cpp
-	src/DMGDecompressor.cpp
-	src/adc.cpp
-	src/HFSZlibReader.cpp
-	src/MemoryReader.cpp
-
-	src/GPTDisk.cpp
-	
-	src/MacBinary.cpp
-	src/ResourceFork.cpp
-	src/CacheZone.cpp
-	src/CachedReader.cpp
-
-	src/HFSHighLevelVolume.cpp
-)
+add_library(dmg SHARED)
+target_sources(dmg PRIVATE ${SOURCES})
 target_link_libraries(dmg -licuuc -lcrypto -lz -lbz2 ${LIBXML2_LIBRARY})
 install(TARGETS dmg DESTINATION lib)
 
@@ -129,7 +103,7 @@ else (NOT DARLING)
 	wrap_elf(fuse libfuse.so)
 
 	add_darling_executable(hdiutil
-		${dmg_sources}
+		${SOURCES}
 		src/main-hdiutil.cpp
 	)
 
