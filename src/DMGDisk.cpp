@@ -14,15 +14,27 @@
 #include "SubReader.h"
 #include "exceptions.h"
 
+static uint64_t findKolyBlock(std::shared_ptr<Reader> reader)
+{
+	if (reader->length() < 1024)
+		throw io_error("File too small");
+
+	char buf[1024];
+	reader->read(buf, sizeof(buf), reader->length() - 1024);
+	for (uint32_t i = 0 ; i < 1024 - sizeof(UDIFResourceFile) + 1 ; i++) {
+		if (strcmp("koly", buf+i) == 0)
+			return reader->length() - 1024 + i;
+	}
+	return 0;
+}
+
 DMGDisk::DMGDisk(std::shared_ptr<Reader> reader)
 	: m_reader(reader), m_zone(40000)
 {
-	uint64_t offset = m_reader->length();
+	uint64_t offset = findKolyBlock(m_reader);
 
-	if (offset < 512)
-		throw io_error("File to small to be a DMG");
-
-	offset -= 512;
+	if (offset == 0)
+		throw io_error("Cannot find koly block at the end");
 
 	if (m_reader->read(&m_udif, sizeof(m_udif), offset) != sizeof(m_udif))
 		throw io_error("Cannot read the KOLY block");
@@ -40,11 +52,8 @@ DMGDisk::~DMGDisk()
 
 bool DMGDisk::isDMG(std::shared_ptr<Reader> reader)
 {
-	uint64_t offset = reader->length() - 512;
-	decltype(UDIFResourceFile::fUDIFSignature) sig = 0;
-
-	reader->read(&sig, sizeof(sig), offset);
-	return be(sig) == UDIF_SIGNATURE;
+	uint64_t offset = findKolyBlock(reader);
+	return offset != 0;
 }
 
 void DMGDisk::loadKoly(const UDIFResourceFile& koly)
