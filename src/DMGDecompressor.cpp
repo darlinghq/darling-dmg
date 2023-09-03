@@ -76,10 +76,10 @@ DMGDecompressor* DMGDecompressor::create(RunType runType, std::shared_ptr<Reader
 	}
 }
 
-int DMGDecompressor::readSome(char** ptr)
+int32_t DMGDecompressor::readSome(char** ptr)
 {
 	*ptr = m_buf;
-	int rd = m_reader->read(m_buf, sizeof(m_buf), m_pos);
+	int32_t rd = m_reader->read(m_buf, sizeof(m_buf), m_pos);
 	
 	if (rd <= 0)
 		throw io_error("DMGDecompressor cannot read from stream");
@@ -87,8 +87,13 @@ int DMGDecompressor::readSome(char** ptr)
 	return rd;
 }
 
-void DMGDecompressor::processed(int bytes)
+/*
+ * bytes can be a negative number, but have to be >= m_pos
+ */
+void DMGDecompressor::processed(int32_t bytes)
 {
+	if ( bytes < 0 && m_pos < (uint32_t)(-bytes) )
+		throw io_error("Position would become negative");
 	m_pos += bytes;
 
 #ifdef DEBUG
@@ -113,7 +118,7 @@ int32_t DMGDecompressor_Zlib::decompress(void* output, int32_t count)
 {
 	int status;
 	char* input;
-	int bytesRead;
+	int32_t bytesRead;
 	
 #ifdef DEBUG
 	//std::cout << "zlib: Asked to provide " << outputBytes << " bytes\n";
@@ -183,7 +188,7 @@ int32_t DMGDecompressor_Bzip2::decompress(void* output, int32_t count)
 {
 	int status;
 	char* input;
-	int bytesRead;
+	int32_t bytesRead;
 	
 #ifdef DEBUG
 	//std::cout << "bz2: Asked to provide " << outputBytes << " bytes\n";
@@ -217,8 +222,6 @@ int32_t DMGDecompressor_Bzip2::decompress(void* output, int32_t count)
 
 int32_t DMGDecompressor_Bzip2::decompress(void* output, int32_t count, int64_t offset)
 {
-	int32_t done = 0;
-	
 #ifdef DEBUG
 	//std::cout << "bz2: Asked to provide " << outputBytes << " bytes\n";
 #endif
@@ -242,7 +245,7 @@ int32_t DMGDecompressor_ADC::decompress(void* output, int32_t count, int64_t off
 		throw io_error("offset < 0");
 
 	int32_t countLeft = count;
-	int nb_read;
+	int32_t nb_read;
 	int32_t nb_input_char_used;
 	char* inputBuffer;
 	int restartIndex = 0;
@@ -290,15 +293,16 @@ int32_t DMGDecompressor_LZFSE::decompress(void* output, int32_t outputBytes)
 {
 	// DMGDecompressor can only read by 8k while compressed length of a LZFSE block can be much bigger
 
-	int32_t done = 0;
 	char* input = nullptr;
 	char *inputBig = nullptr;
 	
-	int inputBytes = readSome(&input);
+	int32_t inputBytes = readSome(&input);
+	if (inputBytes < 0) // read error
+		return inputBytes;
 
 	const uint64_t readerTotalSize = readerLength();
 
-	if (inputBytes < readerTotalSize)
+	if ((uint32_t)inputBytes < readerTotalSize) // inputBytes is >=0 here.
 	{
 		inputBig = new char[readerTotalSize];
 		memcpy(inputBig, input, inputBytes);
@@ -307,15 +311,17 @@ int32_t DMGDecompressor_LZFSE::decompress(void* output, int32_t outputBytes)
 
 		do
 		{
-			int nextReadBytes = readSome(&input);
+			int32_t nextReadBytes = readSome(&input);
+			if (nextReadBytes < 0) // read error
+				return nextReadBytes;
 			
 			memcpy(inputBig + inputBytes, input, nextReadBytes);
 
-			inputBytes += nextReadBytes;
+			inputBytes += nextReadBytes; // nextReadBytes is >=0 here, so inputBytes is still >= 0.
 
 			processed(nextReadBytes);
 		} 
-		while (inputBytes < readerTotalSize);
+		while ((uint32_t)inputBytes < readerTotalSize);
 
 		input = inputBig;
 	}
