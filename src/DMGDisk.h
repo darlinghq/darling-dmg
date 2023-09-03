@@ -29,7 +29,7 @@ private:
 	std::vector<Partition> m_partitions;
 	UDIFResourceFile m_udif;
 	xmlDocPtr m_kolyXML;
-	CacheZone m_zone;
+	std::shared_ptr<CacheZone> m_zone;
 };
 
 #endif

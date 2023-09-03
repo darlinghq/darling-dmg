@@ -14,7 +14,7 @@ class HFSCatalogBTree : protected HFSBTree
 {
 public:
 	// using HFSBTree::HFSBTree;
-	HFSCatalogBTree(std::shared_ptr<HFSFork> fork, HFSVolume* volume, CacheZone* zone);
+	HFSCatalogBTree(std::shared_ptr<HFSFork> fork, HFSVolume* volume, std::shared_ptr<CacheZone> zone);
 
 	int listDirectory(const std::string& path, std::map<std::string, std::shared_ptr<HFSPlusCatalogFileOrFolder>>& contents);
 	

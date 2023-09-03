@@ -13,7 +13,7 @@
 class HFSBTree
 {
 public:
-	HFSBTree(std::shared_ptr<HFSFork> fork, CacheZone* zone, const char* cacheTag);
+	HFSBTree(std::shared_ptr<HFSFork> fork, std::shared_ptr<CacheZone> zone, const char* cacheTag);
 
 	struct Key
 	{
