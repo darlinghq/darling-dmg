@@ -4,7 +4,7 @@
 #include <unicode/unistr.h>
 #include "unichar.h"
 using icu::UnicodeString;
-HFSAttributeBTree::HFSAttributeBTree(std::shared_ptr<HFSFork> fork, CacheZone* zone)
+HFSAttributeBTree::HFSAttributeBTree(std::shared_ptr<HFSFork> fork, std::shared_ptr<CacheZone> zone)
 : HFSBTree(fork, zone, "Attribute")
 {
 }

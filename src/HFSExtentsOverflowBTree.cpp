@@ -3,7 +3,7 @@
 #include "exceptions.h"
 #include <stdexcept>
 
-HFSExtentsOverflowBTree::HFSExtentsOverflowBTree(std::shared_ptr<HFSFork> fork, CacheZone* zone)
+HFSExtentsOverflowBTree::HFSExtentsOverflowBTree(std::shared_ptr<HFSFork> fork, std::shared_ptr<CacheZone> zone)
 	: HFSBTree(fork, zone, "ExtentsOverflow")
 {
 }
