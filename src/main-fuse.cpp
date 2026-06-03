@@ -182,7 +182,7 @@ int handle_exceptions(std::function<int()> func)
 	}
 }
 
-int hfs_getattr(const char* path, struct stat* stat)
+int hfs_getattr(const char* path, struct stat* stat, struct fuse_file_info* /*unused*/)
 {
 	std::cerr << "hfs_getattr(" << path << ")\n";
 
@@ -256,7 +256,7 @@ int hfs_release(const char* path, struct fuse_file_info* info)
 	});
 }
 
-int hfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info* info)
+int hfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info* info, enum fuse_readdir_flags /*unused*/)
 {
 	std::cerr << "hfs_readdir(" << path << ")\n";
 
@@ -267,7 +267,7 @@ int hfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler, off_t offse
 
 		for (auto it = contents.begin(); it != contents.end(); it++)
 		{
-			if (filler(buf, it->first.c_str(), &it->second, 0) != 0)
+			if (filler(buf, it->first.c_str(), &it->second, 0, FUSE_FILL_DIR_DEFAULTS) != 0)
 				return -ENOMEM;
 		}
 
