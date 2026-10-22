@@ -70,6 +70,11 @@ static int doAttach(int argc, char** argv)
 		{ "plist", no_argument, NULL, 7 },
 		{ "readonly", no_argument, NULL, 8 },
 		{ "noidme", no_argument, NULL, 9 },
+		{ "noverify", no_argument, NULL, 10 },
+		{ "verify", no_argument, NULL, 10 },
+		{ "noautofsck", no_argument, NULL, 11 },
+		{ "autofsck", no_argument, NULL, 11 },
+		{ "private", no_argument, NULL, 12 },
 		{ NULL, 0, NULL, 0 }
 	};
 
@@ -134,6 +139,11 @@ static int doAttach(int argc, char** argv)
 				break;
 			case 9:
 				// IDME (download post-processing) is not supported anyways, so this option does nothing
+				break;
+			case 10:
+			case 11:
+			case 12:
+				// Verification and fsck flags are ignored by darling-dmg
 				break;
 			case 0:
 				break;

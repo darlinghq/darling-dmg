@@ -168,8 +168,11 @@ std::shared_ptr<Reader> HFSHighLevelVolume::openFile(const std::string& path)
 				}
 				break;
 			}
-			default:
-				throw function_not_implemented_error("Unknown compression type");
+			default: {
+				char msg[128];
+				snprintf(msg, sizeof(msg), "Unknown compression type: %u", (unsigned int)hdr->compression_type);
+				throw function_not_implemented_error(msg);
+			}
 		}
 	}
 
