@@ -142,8 +142,11 @@ static int doAttach(int argc, char** argv)
 				break;
 			case 10:
 			case 11:
-			case 12:
 				// Verification and fsck flags are ignored by darling-dmg
+				break;
+			case 12:
+				// -private keeps the volume out of Finder and the like on macOS; there is
+				// no such thing here, so the option is accepted and ignored.
 				break;
 			case 0:
 				break;

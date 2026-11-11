@@ -1,6 +1,7 @@
 #include "HFSHighLevelVolume.h"
 #include <stdint.h>
 #include <cstring>
+#include <cstdio>
 #include "HFSAttributeBTree.h"
 #include "HFSZlibReader.h"
 #include "MemoryReader.h"
