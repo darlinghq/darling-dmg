@@ -197,6 +197,30 @@ std::shared_ptr<HFSPlusCatalogFileOrFolder> HFSCatalogBTree::findHFSPlusCatalogF
 	return beContents.begin()->second;
 }
 
+std::string HFSCatalogBTree::volumeName()
+{
+	// The root folder is the only record whose parent is kHFSRootParentID, and its key carries the volume name.
+	HFSPlusCatalogKey key;
+	key.parentID = htobe32(kHFSRootParentID);
+
+	for (std::shared_ptr<HFSBTreeNode> leafPtr : findLeafNodes((Key*) &key, idOnlyComparator))
+	{
+		for (int i = 0; i < leafPtr->recordCount(); i++)
+		{
+			HFSPlusCatalogKey* recordKey = leafPtr->getRecordKey<HFSPlusCatalogKey>(i);
+			HFSPlusCatalogFileOrFolder* ff = leafPtr->getRecordData<HFSPlusCatalogFileOrFolder>(i);
+
+			if (be(recordKey->parentID) == kHFSRootParentID && be(ff->folder.recordType) == RecordType::kHFSPlusFolderRecord
+				&& be(ff->folder.folderID) == kHFSRootFolderID)
+			{
+				return UnicharToString(recordKey->nodeName);
+			}
+		}
+	}
+
+	throw io_error("The catalog has no root folder");
+}
+
 int HFSCatalogBTree::stat(std::string path, HFSPlusCatalogFileOrFolder* s)
 {
 	std::vector<std::string> elems;

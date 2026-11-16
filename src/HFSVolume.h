@@ -20,6 +20,7 @@ public:
 	
 	void usage(uint64_t& totalBytes, uint64_t& freeBytes) const;
 	HFSCatalogBTree* rootCatalogTree();
+	std::string volumeName(); // see HFSCatalogBTree::volumeName
 
 	bool isHFSX() const;
 	inline HFSAttributeBTree* attributes() { return m_attributes; }

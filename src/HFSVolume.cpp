@@ -98,4 +98,8 @@ HFSCatalogBTree* HFSVolume::rootCatalogTree()
 	return btree;
 }
 
-
+std::string HFSVolume::volumeName()
+{
+	std::unique_ptr<HFSCatalogBTree> catalog(rootCatalogTree());
+	return catalog->volumeName();
+}
