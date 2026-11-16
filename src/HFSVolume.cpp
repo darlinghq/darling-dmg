@@ -79,6 +79,11 @@ bool HFSVolume::isHFSPlus(std::shared_ptr<Reader> reader)
 	return be(header.signature) == HFSP_SIGNATURE || be(header.signature) == HFSX_SIGNATURE;
 }
 
+uint32_t HFSVolume::blockSize() const
+{
+	return be(m_header.blockSize);
+}
+
 bool HFSVolume::isHFSX() const
 {
 	return be(m_header.signature) == HFSX_SIGNATURE;

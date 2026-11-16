@@ -24,6 +24,9 @@ std::unique_ptr<HFSHighLevelVolume> g_volume;
 
 // The volume's name, given to Darling's kernel layer (see volumeAttribute).
 static std::string g_volumeName;
+// Its size and free space, for statfs.
+static uint32_t g_blockSize;
+static uint64_t g_totalBytes, g_freeBytes;
 
 int main(int argc, const char** argv)
 {
@@ -52,6 +55,7 @@ int main(int argc, const char** argv)
 		//ops.releasedir = hfs_releasedir;
 		ops.getxattr = hfs_getxattr;
 		ops.listxattr = hfs_listxattr;
+		ops.statfs = hfs_statfs;
 	
 		for (int i = 0; i < argc; i++)
 		{
@@ -102,6 +106,8 @@ void openDisk(const char* path)
 	openDiskImage(path, image);
 	g_volume.reset(new HFSHighLevelVolume(image.volume));
 	g_volumeName = image.volume->volumeName();
+	g_blockSize = image.volume->blockSize();
+	image.volume->usage(g_totalBytes, g_freeBytes);
 }
 
 int handle_exceptions(std::function<int()> func)
@@ -293,6 +299,21 @@ int hfs_getxattr(const char* path, const char* name, char* value, size_t vlen)
 		memcpy(value, &data[0], data.size());
 		return data.size();
 	});
+}
+
+// The volume's size and free space in its own allocation blocks, as macOS reports an HFS+ volume.
+int hfs_statfs(const char* path, struct statvfs* st)
+{
+	memset(st, 0, sizeof(*st));
+	if (g_blockSize == 0)
+		return -EIO;
+	st->f_bsize = g_blockSize;
+	st->f_frsize = g_blockSize;
+	st->f_blocks = g_totalBytes / g_blockSize;
+	st->f_bfree = g_freeBytes / g_blockSize;
+	st->f_bavail = st->f_bfree;
+	st->f_namemax = 255;
+	return 0;
 }
 
 int hfs_listxattr(const char* path, char* buffer, size_t size)

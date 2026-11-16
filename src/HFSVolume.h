@@ -19,6 +19,7 @@ public:
 	~HFSVolume();
 	
 	void usage(uint64_t& totalBytes, uint64_t& freeBytes) const;
+	uint32_t blockSize() const;
 	HFSCatalogBTree* rootCatalogTree();
 	std::string volumeName(); // see HFSCatalogBTree::volumeName
 

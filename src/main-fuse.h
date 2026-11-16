@@ -19,6 +19,7 @@ int hfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler, off_t offse
   int hfs_getxattr(const char* path, const char* name, char* value, size_t vlen);
 #endif
 int hfs_listxattr(const char* path, char* buffer, size_t size);
+int hfs_statfs(const char* path, struct statvfs* st);
 
 #endif
 
