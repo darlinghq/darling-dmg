@@ -159,7 +159,7 @@ else (NOT DARLING)
 
 	# links the LibreSSL 2.8.3 libcrypto.44 (through libdarling-dmg), so compile against its headers
 	target_include_directories(hdiutil BEFORE PRIVATE ${CMAKE_SOURCE_DIR}/src/external/libressl-2.8.3/include)
-	target_link_libraries(hdiutil darling-dmg cxx)
+	target_link_libraries(hdiutil darling-dmg cxx CoreFoundation)
 	install(TARGETS hdiutil DESTINATION libexec/darling/usr/bin)
 
 endif (NOT DARLING)
