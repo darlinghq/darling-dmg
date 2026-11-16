@@ -4,28 +4,18 @@
 #include <errno.h>
 #include <unistd.h>
 #include <cstdlib>
-#include <elfcalls.h>
-#include <sys/wait.h>
-#include <spawn.h>
 #include <getopt.h>
 #include <limits.h>
 #include <sys/mount.h>
 #include <sys/param.h>
 
+#include <darling-dmg/darling_dmg.h>
+
 static void printMount();
 
-#define main main_fuse
-#define BEFORE_MOUNT_EXTRA printMount(); daemon(false, false)
-#include "main-fuse.cpp"
-#undef main
-
 static void printHelp();
-static void doFork(void);
 static int doAttach(int argc, char** argv);
 static int doDetach(int argc, char** argv);
-static void addFusermountIntoPath();
-
-extern "C" int __darling_vchroot_expand(const char* path, char* out);
 
 int main(int argc, char** argv)
 {
@@ -81,12 +71,7 @@ static int doAttach(int argc, char** argv)
 		{ NULL, 0, NULL, 0 }
 	};
 
-	std::string prefix, mount, dmg;
-	std::string mountname, mountroot;
-	const char *p, *p2;
-	int fd;
-	char output[] = "/tmp/hdiutilXXXXXX";
-	const char* args[7];
+	std::string mount, dmg, mountroot;
 	bool quiet = false;
 
 	mountroot = "/Volumes";
@@ -166,87 +151,29 @@ static int doAttach(int argc, char** argv)
 
 	dmg = argv[optind];
 
-	if (access(dmg.c_str(), R_OK) != 0)
+	darling_dmg_image* image;
+	int err = darling_dmg_open(dmg.c_str(), &image);
+	if (err != 0)
 	{
-		std::cerr << "Cannot access " << dmg.c_str() << std::endl;
+		if (!quiet)
+			std::cerr << "hdiutil: attach failed - " << (err == EFTYPE ? "image not recognized" : strerror(err)) << std::endl;
 		return 1;
 	}
 
-	p = strrchr(argv[optind], '/');
-	if (p == nullptr)
-		p = argv[optind];
-	else
-		p++;
-
-	p2 = strrchr(argv[optind], '.');
-	if (p2 == nullptr)
-		p2 = argv[optind] + strlen(argv[optind]);
-
-	mountname = std::string(p, p2-p);
-
-	if (mount.empty())
+	struct darling_dmg_attach_options options = { mountroot.c_str(), mount.empty() ? nullptr : mount.c_str() };
+	char mountPoint[PATH_MAX];
+	err = darling_dmg_attach(image, &options, mountPoint, sizeof(mountPoint));
+	darling_dmg_close(image);
+	if (err != 0)
 	{
-		mount = mountroot;
-		if (mount[mount.length()-1] != '/')
-			mount += '/';
-		mount += mountname;
-	}
-
-	if (mkdir(mount.c_str(), 0777) == -1 && errno != EEXIST)
-	{
-		std::cerr << "Cannot mkdir " << mount << std::endl;
-		return 1;
-	}
-	g_mountDir = mount;
-
-	fd = mkstemp(output);
-
-	// redirect stderr into temp file
-	dup2(2, 255);
-	close(2);
-
-	dup2(fd, 2);
-
-	args[0] = "darling-dmg";
-	args[1] = dmg.c_str();
-
-	char linux_path[4096];
-	__darling_vchroot_expand(mount.c_str(), linux_path);
-	args[2] = linux_path;
-
-	std::cerr << "Will pass " << args[2] << std::endl;
-
-	args[3] = "-f"; // Fork has to be done by Darling code, otherwise the LKM will not talk to us any more
-	args[4] = "-o";
-	args[5] = "nonempty";
-	args[6] = nullptr;
-
-	addFusermountIntoPath();
-
-	if (main_fuse(4, args) != 0)
-	{
-		char buf[512];
-		int rd;
-
-		// redirect stderr back
-		close(2);
-		dup2(255, 2);
-
-		lseek(fd, SEEK_SET, 0);
-
-		while ((rd = read(fd, buf, sizeof(buf))) > 0)
-		{
-			write(2, buf, rd);
-		}
-		close(fd);
-		unlink(output);
-
+		if (!quiet)
+			std::cerr << "hdiutil: attach failed - " << strerror(err) << std::endl;
 		return 1;
 	}
 
-	close(fd);
-	unlink(output);
-
+	g_mountDir = mountPoint;
+	if (!quiet)
+		printMount();
 	return 0;
 }
 
@@ -296,12 +223,6 @@ static void printMount()
 		std::cout << "/dev/disk1\tGUID_partition_scheme\t\n";
 		std::cout << "/dev/disk1s1\tApple_HFS\t" << g_mountDir << std::endl;
 	}
-}
-
-extern "C"
-{
-	extern const struct elf_calls* _elfcalls;
-	extern char **environ;
 }
 
 
@@ -364,33 +285,15 @@ static int doDetach(int argc, char** argv)
 	}
 
 	std::string name = detachName(path);
-	if (unmount(path, flags) != 0)
+	int err = darling_dmg_detach(path, (flags & MNT_FORCE) != 0);
+	if (err != 0)
 	{
-		int err = errno;
 		if (!quiet)
 			std::cerr << "hdiutil: couldn't unmount \"" << name << "\" - " << strerror(err) << std::endl;
 		return err;
 	}
 
-	rmdir(path);
 	if (!quiet)
 		std::cout << "\"" << name << "\" ejected." << std::endl;
 	return 0;
-}
-
-void addFusermountIntoPath()
-{
-	std::string path = getenv("PATH");
-	int (*elf_setenv)(const char *name, const char *value, int overwrite);
-
-	path += ":/Volumes/SystemRoot/bin"
-		":/Volumes/SystemRoot/usr/bin";
-
-	// Calling setenv doesn't change current process' environment variables,
-	// it only modifies the local copy maintained by libc. This local copy
-	// is then passed by libc to execve().
-	// Since the execution of 'fusermount' happens in libfuse.so, we need
-	// to add it into the environment on the ELF side.
-	*((void**)(&elf_setenv)) = _elfcalls->dlsym_fatal(nullptr, "setenv");
-	elf_setenv("PATH", path.c_str(), true);
 }
