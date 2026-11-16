@@ -25,6 +25,10 @@ public:
 	int openFile(const std::string& path, std::shared_ptr<Reader>& forkOut, bool resourceFork = false);
 
 	bool isCaseSensitive() const;
+
+	// The volume's name as stored: the name of the root folder, UTF-8. HFS+ names may contain '/' (which POSIX
+	// paths show as ':'); it is returned unchanged.
+	std::string volumeName();
 	
 	// Debug only
 	void dumpTree() const;

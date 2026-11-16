@@ -29,15 +29,50 @@ struct darling_dmg_image
 	DiskImage image;
 };
 
-// The file name without its directory and its last extension.
-static std::string nameFromPath(const std::string& path)
+// The directory name a volume is mounted under: its name as a single path component. HFS names may contain '/',
+// which POSIX paths show as ':' (as macOS mounts a volume named "A/B" at "/Volumes/A:B").
+static std::string mountPointName(const std::string& volumeName)
 {
-	size_t slash = path.rfind('/');
-	std::string name = path.substr(slash == std::string::npos ? 0 : slash + 1);
-	size_t dot = name.rfind('.');
-	if (dot != std::string::npos && dot != 0)
-		name.erase(dot);
+	std::string name = volumeName;
+	for (char& c : name)
+	{
+		if (c == '/')
+			c = ':';
+	}
+	if (name.empty() || name == "." || name == "..")
+		name = "untitled";
 	return name;
+}
+
+// QUIRK: when <root>/<name> is taken, the volume is mounted at "<root>/<name> <n>" with the lowest free n, where n
+// starts at 1 in /Volumes but at 2 under any other mount root (hdiutil attach -mountroot). Not documented.
+// Evidence: black-box observation on macOS 26.7.3 (tier 2), recorded in tests/dmg-attach.md.
+// Test: tests/dmg-attach.sh, "two images attached at once" and "same name under -mountroot".
+static unsigned firstSuffixForTakenName(const std::string& mountRoot)
+{
+	return mountRoot == "/Volumes" ? 1 : 2;
+}
+
+// Makes the mount point directory for a volume named name in mountRoot, under a name nothing else has taken.
+static int makeMountPoint(const std::string& mountRoot, const std::string& name, std::string& mountPoint)
+{
+	std::string base = mountRoot == "/" ? "/" + name : mountRoot + "/" + name;
+	mountPoint = base;
+	unsigned suffix = firstSuffixForTakenName(mountRoot);
+
+	while (mkdir(mountPoint.c_str(), 0777) != 0)
+	{
+		if (errno != EEXIST)
+			return errno;
+		// On macOS the system removes a mount point it made in /Volumes once its volume is unmounted, however that
+		// happens. Darling has nothing doing that yet, so a bare unmount(2) leaves the empty directory behind; an
+		// empty directory there with nothing mounted on it is such a leftover and the name is free. (rmdir fails
+		// for a directory that is not empty and for a mount point.)
+		if (mountRoot == "/Volumes" && rmdir(mountPoint.c_str()) == 0)
+			continue;
+		mountPoint = base + " " + std::to_string(suffix++);
+	}
+	return 0;
 }
 
 int darling_dmg_open(const char* path, darling_dmg_image** out)
@@ -69,6 +104,7 @@ int darling_dmg_open(const char* path, darling_dmg_image** out)
 	try
 	{
 		openDiskImage(absolute, image->image);
+		image->volumeName = image->image.volume->volumeName();
 	}
 	catch (const io_error&)
 	{
@@ -81,7 +117,6 @@ int darling_dmg_open(const char* path, darling_dmg_image** out)
 		return EFTYPE;
 	}
 
-	image->volumeName = nameFromPath(image->path);
 	*out = image;
 	return 0;
 }
@@ -161,33 +196,40 @@ int darling_dmg_attach(darling_dmg_image* image, const struct darling_dmg_attach
 		return EINVAL;
 
 	std::string mountPoint;
+	bool created;
 	if (options != nullptr && options->mount_point != nullptr)
+	{
 		mountPoint = options->mount_point;
+		created = mkdir(mountPoint.c_str(), 0777) == 0;
+		if (!created)
+		{
+			if (errno != EEXIST)
+				return errno;
+			struct stat st;
+			if (stat(mountPoint.c_str(), &st) != 0)
+				return errno;
+			if (!S_ISDIR(st.st_mode))
+				return ENOTDIR;
+			if (isMountPoint(mountPoint.c_str()))
+				return EBUSY;
+		}
+	}
 	else
 	{
-		mountPoint = (options != nullptr && options->mount_root != nullptr) ? options->mount_root : "/Volumes";
-		while (mountPoint.size() > 1 && mountPoint.back() == '/')
-			mountPoint.pop_back();
-		if (mountPoint != "/")
-			mountPoint += '/';
-		mountPoint += image->volumeName;
+		std::string mountRoot = (options != nullptr && options->mount_root != nullptr) ? options->mount_root : "/Volumes";
+		while (mountRoot.size() > 1 && mountRoot.back() == '/')
+			mountRoot.pop_back();
+		int err = makeMountPoint(mountRoot, mountPointName(image->volumeName), mountPoint);
+		if (err != 0)
+			return err;
+		created = true;
 	}
 
 	if (mountPoint.size() + 1 > mount_point_size)
-		return ENAMETOOLONG;
-
-	bool created = mkdir(mountPoint.c_str(), 0777) == 0;
-	if (!created)
 	{
-		if (errno != EEXIST)
-			return errno;
-		struct stat st;
-		if (stat(mountPoint.c_str(), &st) != 0)
-			return errno;
-		if (!S_ISDIR(st.st_mode))
-			return ENOTDIR;
-		if (isMountPoint(mountPoint.c_str()))
-			return EBUSY;
+		if (created)
+			rmdir(mountPoint.c_str());
+		return ENAMETOOLONG;
 	}
 
 	int err = runMountHelper(image->path, mountPoint);
