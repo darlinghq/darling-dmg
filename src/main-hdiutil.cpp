@@ -8,6 +8,9 @@
 #include <sys/wait.h>
 #include <spawn.h>
 #include <getopt.h>
+#include <limits.h>
+#include <sys/mount.h>
+#include <sys/param.h>
 
 static void printMount();
 
@@ -302,16 +305,27 @@ extern "C"
 }
 
 
+// The name a detach message gives the image. macOS names the disk ("disk5"); until disk images have disk names
+// here, the mount point stands in for it.
+static std::string detachName(const char* mountPoint)
+{
+	return mountPoint;
+}
+
+// Detaches the disk image mounted at the given path. Messages and exit statuses follow hdiutil on macOS:
+// '"<disk>" ejected.' on success; on a failed unmount 'couldn't unmount "<disk>" - <error>' and the errno as the
+// exit status; 'detach failed - No such file or directory' and status 1 for a path no image is mounted on.
 static int doDetach(int argc, char** argv)
 {
-	pid_t pid;
-	int (*elf_posix_spawnp)(pid_t* pid, const char* path, const posix_spawn_file_actions_t *file_actions, const posix_spawnattr_t *attrp, char *const argv[], char *const envp[]);
+	bool quiet = false;
+	int flags = 0;
 
 	if (argc < 3)
 		printHelp();
 
 	static const struct option longopts[] = {
 		{ "quiet", no_argument, NULL, 1 },
+		{ "force", no_argument, NULL, 2 },
 		{ NULL, 0, NULL, 0 }
 	};
 
@@ -325,6 +339,10 @@ static int doDetach(int argc, char** argv)
 		switch (ch)
 		{
 			case 1:
+				quiet = true;
+				break;
+			case 2:
+				flags |= MNT_FORCE;
 				break;
 			case 0:
 				break;
@@ -333,26 +351,31 @@ static int doDetach(int argc, char** argv)
 		}
 	}
 
-	addFusermountIntoPath();
+	if (optind != argc - 1)
+		printHelp();
 
-	char linux_path[4096];
-	__darling_vchroot_expand(argv[optind], linux_path);
-	const char* pargv[] = { "fusermount", "-u", linux_path, nullptr };
-
-	*((void**)(&elf_posix_spawnp)) = _elfcalls->dlsym_fatal(nullptr, "posix_spawnp");
-	if (elf_posix_spawnp(&pid, "fusermount", nullptr, nullptr, (char* const*) pargv, environ) != 0)
+	char path[PATH_MAX];
+	struct statfs sfs;
+	if (realpath(argv[optind], path) == nullptr || statfs(path, &sfs) != 0 || strcmp(sfs.f_mntonname, path) != 0)
 	{
-		std::cerr << "Failed to execute fusermount!\n";
+		if (!quiet)
+			std::cerr << "hdiutil: detach failed - " << strerror(ENOENT) << std::endl;
 		return 1;
 	}
-	else
-	{
-		int status;
-		waitpid(pid, &status, 0);
-		rmdir(argv[optind]);
 
-		return 0;
+	std::string name = detachName(path);
+	if (unmount(path, flags) != 0)
+	{
+		int err = errno;
+		if (!quiet)
+			std::cerr << "hdiutil: couldn't unmount \"" << name << "\" - " << strerror(err) << std::endl;
+		return err;
 	}
+
+	rmdir(path);
+	if (!quiet)
+		std::cout << "\"" << name << "\" ejected." << std::endl;
+	return 0;
 }
 
 void addFusermountIntoPath()
