@@ -14,7 +14,12 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <strings.h>
+#include <vector>
+
 #include "DiskImage.h"
+#include "DMGDisk.h"
+#include "LicenseAgreement.h"
 #include "exceptions.h"
 
 extern "C" char** environ;
@@ -27,7 +32,39 @@ struct darling_dmg_image
 	std::string path;
 	std::string volumeName;
 	DiskImage image;
+	std::vector<LicenseAgreement> agreements;
+	std::vector<darling_dmg_license> licenses; // views of agreements for the C API
 };
+
+static void loadLicenses(darling_dmg_image* image)
+{
+	DMGDisk* dmg = dynamic_cast<DMGDisk*>(image->image.partitions.get());
+	if (dmg == nullptr)
+		return;
+
+	image->agreements = loadLicenseAgreements([dmg](const std::string& type, int id, std::vector<uint8_t>& data) {
+		return dmg->resource(type, id, data);
+	});
+
+	for (const LicenseAgreement& agreement : image->agreements)
+	{
+		darling_dmg_license license = {};
+		license.language = agreement.language.c_str();
+		license.is_default = agreement.isDefault;
+		license.is_rtf = agreement.isRTF;
+		license.text = agreement.text.c_str();
+		if (agreement.hasStrings)
+		{
+			license.language_name = agreement.languageName.c_str();
+			license.agree = agreement.agree.c_str();
+			license.disagree = agreement.disagree.c_str();
+			license.print = agreement.print.c_str();
+			license.save = agreement.save.c_str();
+			license.message = agreement.message.c_str();
+		}
+		image->licenses.push_back(license);
+	}
+}
 
 // The directory name a volume is mounted under: its name as a single path component. HFS names may contain '/',
 // which POSIX paths show as ':' (as macOS mounts a volume named "A/B" at "/Volumes/A:B").
@@ -105,6 +142,7 @@ int darling_dmg_open(const char* path, darling_dmg_image** out)
 	{
 		openDiskImage(absolute, image->image);
 		image->volumeName = image->image.volume->volumeName();
+		loadLicenses(image);
 	}
 	catch (const io_error&)
 	{
@@ -119,6 +157,62 @@ int darling_dmg_open(const char* path, darling_dmg_image** out)
 
 	*out = image;
 	return 0;
+}
+
+size_t darling_dmg_license_count(darling_dmg_image* image)
+{
+	return image->licenses.size();
+}
+
+const struct darling_dmg_license* darling_dmg_license_at(darling_dmg_image* image, size_t index)
+{
+	return index < image->licenses.size() ? &image->licenses[index] : nullptr;
+}
+
+// A BCP 47 tag with '_' read as '-', and its language subtag alone.
+static std::string normalizedTag(const char* tag)
+{
+	std::string result = tag;
+	for (char& c : result)
+	{
+		if (c == '_')
+			c = '-';
+	}
+	return result;
+}
+
+static std::string languageSubtag(const std::string& tag)
+{
+	return tag.substr(0, tag.find('-'));
+}
+
+const struct darling_dmg_license* darling_dmg_license_for_languages(darling_dmg_image* image,
+	const char* const* preferred, size_t count)
+{
+	for (size_t i = 0; preferred != nullptr && i < count; i++)
+	{
+		if (preferred[i] == nullptr)
+			continue;
+		std::string wanted = normalizedTag(preferred[i]);
+
+		for (const darling_dmg_license& license : image->licenses)
+		{
+			if (strcasecmp(license.language, wanted.c_str()) == 0)
+				return &license;
+		}
+		for (const darling_dmg_license& license : image->licenses)
+		{
+			if (strcasecmp(languageSubtag(license.language).c_str(), languageSubtag(wanted).c_str()) == 0)
+				return &license;
+		}
+	}
+
+	for (const darling_dmg_license& license : image->licenses)
+	{
+		if (license.is_default)
+			return &license;
+	}
+	return nullptr;
 }
 
 void darling_dmg_close(darling_dmg_image* image)

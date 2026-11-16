@@ -3,8 +3,6 @@
 #include "be.h"
 #include <iostream>
 #include <cstring>
-#include <openssl/bio.h>
-#include <openssl/evp.h>
 #include <memory>
 #include <sstream>
 #include "DMGPartition.h"
@@ -201,26 +199,66 @@ BLKXTable* DMGDisk::loadBLKXTableForPartition(int index)
 	return rv;
 }
 
+bool DMGDisk::resource(const std::string& type, int id, std::vector<uint8_t>& data)
+{
+	// Resource types are four printable characters (one of them may be a space); anything else cannot be
+	// looked up through an XPath string literal and is not a resource type.
+	if (type.size() != 4 || type.find_first_of("'\"") != std::string::npos)
+		return false;
+
+	std::string expr = "string(/plist/dict/key[text()='resource-fork']/following-sibling::dict[1]/key[text()='" + type
+		+ "']/following-sibling::array[1]/dict[key[text()='ID']/following-sibling::string[1][text()='" + std::to_string(id)
+		+ "']]/key[text()='Data']/following-sibling::data[1])";
+
+	xmlXPathContextPtr xpathContext = xmlXPathNewContext(m_kolyXML);
+	xmlXPathObjectPtr xpathObj = xmlXPathEvalExpression((const xmlChar*) expr.c_str(), xpathContext);
+	bool found = false;
+
+	data.clear();
+	if (xpathObj && xpathObj->stringval && *xpathObj->stringval)
+		found = base64Decode((char*) xpathObj->stringval, data);
+
+	xmlXPathFreeObject(xpathObj);
+	xmlXPathFreeContext(xpathContext);
+	return found;
+}
+
+// Base64 (RFC 4648) as plists store <data>: whitespace anywhere is ignored, '=' padding ends the data.
 bool DMGDisk::base64Decode(const std::string& input, std::vector<uint8_t>& output)
 {
-	BIO *b64, *bmem;
-	std::unique_ptr<char[]> buffer(new char[input.length()]);
-	int rd;
+	uint32_t bits = 0;
+	int bitCount = 0;
 
-    auto b64_input = input.substr(0, input.find_last_not_of("\r\t\f\v"));
+	output.clear();
+	for (char c : input)
+	{
+		int value;
+		if (c >= 'A' && c <= 'Z')
+			value = c - 'A';
+		else if (c >= 'a' && c <= 'z')
+			value = c - 'a' + 26;
+		else if (c >= '0' && c <= '9')
+			value = c - '0' + 52;
+		else if (c == '+')
+			value = 62;
+		else if (c == '/')
+			value = 63;
+		else if (c == '=')
+			break;
+		else if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v')
+			continue;
+		else
+			return false;
 
-	b64 = BIO_new(BIO_f_base64());
-	bmem = BIO_new_mem_buf((void*) b64_input.c_str(), b64_input.length());
-	bmem = BIO_push(b64, bmem);
-	//BIO_set_flags(bmem, BIO_FLAGS_BASE64_NO_NL);
-
-	rd = BIO_read(bmem, buffer.get(), b64_input.length());
-
-	if (rd > 0)
-		output.assign(buffer.get(), buffer.get()+rd);
-
-	BIO_free_all(bmem);
-	return rd >= 0;
+		bits = (bits << 6) | value;
+		bitCount += 6;
+		if (bitCount >= 8)
+		{
+			bitCount -= 8;
+			output.push_back(uint8_t(bits >> bitCount));
+		}
+	}
+	return true;
 }
 
 std::shared_ptr<Reader> DMGDisk::readerForPartition(int index)
