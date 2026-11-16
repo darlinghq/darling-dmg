@@ -39,6 +39,29 @@ int darling_dmg_attach(darling_dmg_image* image, const struct darling_dmg_attach
  * directory. ENOENT if nothing is mounted there; otherwise the error unmount(2) failed with. */
 int darling_dmg_detach(const char* mount_point, int force);
 
+/* Licence agreement ("SLA") an image asks to be accepted before it is attached, in one language. */
+struct darling_dmg_license {
+	const char* language;      /* BCP 47 tag, e.g. "en-US", "de-DE", "ja-JP" */
+	int is_default;            /* the language the image names as its default */
+	int is_rtf;                /* text is RTF rather than plain text */
+	const char* text;          /* UTF-8; line breaks are '\n' */
+	const char* language_name; /* the remaining strings are UTF-8, NULL if the image does not provide them */
+	const char* agree;
+	const char* disagree;
+	const char* print;
+	const char* save;
+	const char* message;       /* the prompt shown with the buttons */
+};
+
+/* Number of languages the image's agreement comes in; 0 if it has none (or one that cannot be read). */
+size_t darling_dmg_license_count(darling_dmg_image* image);
+/* NULL if index is out of range. Valid until darling_dmg_close. */
+const struct darling_dmg_license* darling_dmg_license_at(darling_dmg_image* image, size_t index);
+/* The agreement in the first of the preferred languages (BCP 47 tags, '_' accepted for '-') the image has, matched
+ * by the full tag first and then by language alone; otherwise the default one. NULL if the image has none. */
+const struct darling_dmg_license* darling_dmg_license_for_languages(darling_dmg_image* image,
+	const char* const* preferred, size_t count);
+
 #ifdef __cplusplus
 }
 #endif

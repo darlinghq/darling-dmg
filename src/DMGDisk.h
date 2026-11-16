@@ -17,6 +17,10 @@ public:
 	virtual std::shared_ptr<Reader> readerForPartition(int index) override;
 
 	static bool isDMG(std::shared_ptr<Reader> reader);
+
+	// The data of the resource of the given type and ID in the image's resource fork (UDIF plist "resource-fork"
+	// dictionary); false if the image has no such resource.
+	bool resource(const std::string& type, int id, std::vector<uint8_t>& data);
 private:
 	void loadKoly(const UDIFResourceFile& koly);
 	bool loadPartitionElements(xmlXPathContextPtr xpathContext, xmlNodeSetPtr nodes);
