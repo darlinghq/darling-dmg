@@ -154,7 +154,7 @@ else (NOT DARLING)
 	add_darling_executable(hdiutil
 		src/main-hdiutil.cpp
 	)
-	target_link_libraries(hdiutil darling-dmg cxx)
+	target_link_libraries(hdiutil darling-dmg cxx CoreFoundation)
 	install(TARGETS hdiutil DESTINATION libexec/darling/usr/bin)
 
 endif (NOT DARLING)

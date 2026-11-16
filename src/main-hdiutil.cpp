@@ -8,7 +8,9 @@
 #include <limits.h>
 #include <sys/mount.h>
 #include <sys/param.h>
+#include <vector>
 
+#include <CoreFoundation/CoreFoundation.h>
 #include <darling-dmg/darling_dmg.h>
 
 static void printMount();
@@ -46,6 +48,83 @@ static void printHelp()
 static std::string g_mountDir;
 static bool puppetstrings = false;
 static bool plist = false;
+
+// The user's preferred languages, most preferred first (BCP 47).
+static std::vector<std::string> preferredLanguages()
+{
+	std::vector<std::string> languages;
+	CFArrayRef preferred = CFLocaleCopyPreferredLanguages();
+	if (preferred == nullptr)
+		return languages;
+
+	for (CFIndex i = 0; i < CFArrayGetCount(preferred); i++)
+	{
+		CFStringRef language = (CFStringRef) CFArrayGetValueAtIndex(preferred, i);
+		char buffer[64];
+		if (CFStringGetCString(language, buffer, sizeof(buffer), kCFStringEncodingUTF8))
+			languages.push_back(buffer);
+	}
+	CFRelease(preferred);
+	return languages;
+}
+
+// The agreement text as hdiutil prints it: a single line break joins lines with a space, two or more separate
+// paragraphs by an empty line, and the text ends with a line break (an empty line if it ended in two or more).
+// Observed on macOS 26.7.3, see tests/dmg-license.md.
+static std::string reflowAgreement(const std::string& text)
+{
+	std::string result;
+	size_t i = text.find_first_not_of('\n');
+
+	while (i != std::string::npos && i < text.size())
+	{
+		size_t end = text.find('\n', i);
+		if (end == std::string::npos)
+		{
+			result.append(text, i, std::string::npos);
+			return result + "\n";
+		}
+		result.append(text, i, end - i);
+
+		size_t next = text.find_first_not_of('\n', end);
+		size_t breaks = (next == std::string::npos ? text.size() : next) - end;
+		if (next == std::string::npos)
+			return result + (breaks >= 2 ? "\n\n" : "\n");
+		result += breaks >= 2 ? "\n\n" : " ";
+		i = next;
+	}
+	return result;
+}
+
+// Shows the image's licence agreement and reads the answer from stdin, one line at a time: a line starting with
+// y or Y agrees, one starting with n or N, an empty line or the end of input declines, anything else is asked
+// again (leading blanks are skipped). The prompt is only shown on a terminal; -quiet never agrees.
+// Observed on macOS 26.7.3, see tests/dmg-license.md.
+static bool userAgrees(const struct darling_dmg_license* license, bool quiet)
+{
+	if (quiet)
+		return false;
+
+	std::cout << reflowAgreement(license->text) << std::flush;
+
+	bool terminal = isatty(STDIN_FILENO);
+	std::string line;
+	for (;;)
+	{
+		if (terminal)
+			std::cout << "Agree Y/N? " << std::flush;
+		if (!std::getline(std::cin, line))
+			return false;
+
+		size_t first = line.find_first_not_of(" \t");
+		if (first == std::string::npos)
+			return false;
+		if (line[first] == 'y' || line[first] == 'Y')
+			return true;
+		if (line[first] == 'n' || line[first] == 'N')
+			return false;
+	}
+}
 
 static int doAttach(int argc, char** argv)
 {
@@ -158,6 +237,23 @@ static int doAttach(int argc, char** argv)
 		if (!quiet)
 			std::cerr << "hdiutil: attach failed - " << (err == EFTYPE ? "image not recognized" : strerror(err)) << std::endl;
 		return 1;
+	}
+
+	if (darling_dmg_license_count(image) > 0)
+	{
+		std::vector<std::string> languages = preferredLanguages();
+		std::vector<const char*> preferred;
+		for (const std::string& language : languages)
+			preferred.push_back(language.c_str());
+
+		const struct darling_dmg_license* license = darling_dmg_license_for_languages(image, preferred.data(), preferred.size());
+		if (license != nullptr && !userAgrees(license, quiet))
+		{
+			darling_dmg_close(image);
+			if (!quiet)
+				std::cerr << "hdiutil: attach canceled" << std::endl;
+			return 1;
+		}
 	}
 
 	struct darling_dmg_attach_options options = { mountroot.c_str(), mount.empty() ? nullptr : mount.c_str() };
