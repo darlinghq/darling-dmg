@@ -22,6 +22,9 @@
 
 std::unique_ptr<HFSHighLevelVolume> g_volume;
 
+// The volume's name, given to Darling's kernel layer (see volumeAttribute).
+static std::string g_volumeName;
+
 int main(int argc, const char** argv)
 {
 	try
@@ -98,6 +101,7 @@ void openDisk(const char* path)
 
 	openDiskImage(path, image);
 	g_volume.reset(new HFSHighLevelVolume(image.volume));
+	g_volumeName = image.volume->volumeName();
 }
 
 int handle_exceptions(std::function<int()> func)
@@ -242,6 +246,27 @@ int hfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler, off_t offse
 
 }
 
+// Darling's kernel layer asks the root of a FUSE volume for these two attributes to answer getattrlist(ATTR_VOL_NAME)
+// and statfs().f_fstypename the way macOS does: "darling.volume.name" is the volume name (UTF-8, unterminated) and
+// "darling.volume.kind" the file system kind. They are not listed; guests cannot see them, because guest xattrs are
+// all "user." ones on the host.
+static bool volumeAttribute(const char* path, const char* name, std::vector<uint8_t>& data)
+{
+	if (strcmp(path, "/") != 0)
+		return false;
+
+	const char* value;
+	if (strcmp(name, "darling.volume.name") == 0)
+		value = g_volumeName.c_str();
+	else if (strcmp(name, "darling.volume.kind") == 0)
+		value = "hfs";
+	else
+		return false;
+
+	data.assign(value, value + strlen(value));
+	return true;
+}
+
 #if defined(__APPLE__) && !defined(DARLING)
 int hfs_getxattr(const char* path, const char* name, char* value, size_t vlen, uint32_t position)
 #else
@@ -256,7 +281,8 @@ int hfs_getxattr(const char* path, const char* name, char* value, size_t vlen)
 	return handle_exceptions([&]() -> int {
 		std::vector<uint8_t> data;
 
-		data = g_volume->getXattr(path, name);
+		if (!volumeAttribute(path, name, data))
+			data = g_volume->getXattr(path, name);
 
 		if (value == nullptr)
 			return data.size();
