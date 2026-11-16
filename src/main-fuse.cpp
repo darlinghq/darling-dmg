@@ -15,13 +15,12 @@
 #include "CachedReader.h"
 #include "exceptions.h"
 #include "HFSHighLevelVolume.h"
+#include "DiskImage.h"
 #ifdef DARLING
 #	include "stat_xlate.h"
 #endif
 
-std::shared_ptr<Reader> g_fileReader;
 std::unique_ptr<HFSHighLevelVolume> g_volume;
-std::unique_ptr<PartitionedDisk> g_partitions;
 
 int main(int argc, const char** argv)
 {
@@ -93,45 +92,10 @@ void showHelp(const char* argv0)
 
 void openDisk(const char* path)
 {
-	int partIndex = -1;
-	std::shared_ptr<HFSVolume> volume;
+	static DiskImage image;
 
-	g_fileReader.reset(new FileReader(path));
-
-	if (DMGDisk::isDMG(g_fileReader))
-		g_partitions.reset(new DMGDisk(g_fileReader));
-	else if (GPTDisk::isGPTDisk(g_fileReader))
-		g_partitions.reset(new GPTDisk(g_fileReader));
-	else if (AppleDisk::isAppleDisk(g_fileReader))
-		g_partitions.reset(new AppleDisk(g_fileReader));
-	else if (HFSVolume::isHFSPlus(g_fileReader))
-		volume.reset(new HFSVolume(g_fileReader));
-	else
-		throw function_not_implemented_error("Unsupported file format");
-
-	if (g_partitions)
-	{
-		const std::vector<PartitionedDisk::Partition>& parts = g_partitions->partitions();
-
-		for (size_t i = 0; i < parts.size(); i++)
-		{
-			if (parts[i].type == "Apple_HFS" || parts[i].type == "Apple_HFSX")
-			{
-				std::cerr << "Using partition #" << i << " of type " << parts[i].type << std::endl;
-				partIndex = i;
-				break;
-			}
-			else
-				std::cerr << "Skipping partition of type " << parts[i].type << std::endl;
-		}
-
-		if (partIndex == -1)
-			throw function_not_implemented_error("No suitable partition found in file");
-
-		volume.reset(new HFSVolume(g_partitions->readerForPartition(partIndex)));
-	}
-	
-	g_volume.reset(new HFSHighLevelVolume(volume));
+	openDiskImage(path, image);
+	g_volume.reset(new HFSHighLevelVolume(image.volume));
 }
 
 int handle_exceptions(std::function<int()> func)
