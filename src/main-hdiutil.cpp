@@ -46,6 +46,23 @@ static void printHelp()
 }
 
 static std::string g_mountDir;
+
+// Text as the content of an XML element.
+static std::string xmlEscaped(const std::string& text)
+{
+	std::string escaped;
+	for (char c : text)
+	{
+		switch (c)
+		{
+			case '&': escaped += "&amp;"; break;
+			case '<': escaped += "&lt;"; break;
+			case '>': escaped += "&gt;"; break;
+			default: escaped += c;
+		}
+	}
+	return escaped;
+}
 static bool puppetstrings = false;
 static bool plist = false;
 
@@ -70,7 +87,8 @@ static std::vector<std::string> preferredLanguages()
 
 // The agreement text as hdiutil prints it: a single line break joins lines with a space, two or more separate
 // paragraphs by an empty line, and the text ends with a line break (an empty line if it ended in two or more).
-// Observed on macOS 26.7.3, see tests/dmg-license.md.
+// QUIRK: this reflowing is not documented. Evidence: black-box observation on macOS 26.7.3 (tier 2), recorded in
+// tests/dmg-license.md. Test: tests/dmg-license.sh, "line breaks in the text".
 static std::string reflowAgreement(const std::string& text)
 {
 	std::string result;
@@ -99,7 +117,9 @@ static std::string reflowAgreement(const std::string& text)
 // Shows the image's licence agreement and reads the answer from stdin, one line at a time: a line starting with
 // y or Y agrees, one starting with n or N, an empty line or the end of input declines, anything else is asked
 // again (leading blanks are skipped). The prompt is only shown on a terminal; -quiet never agrees.
-// Observed on macOS 26.7.3, see tests/dmg-license.md.
+// QUIRK: none of this is documented. Evidence: black-box observation on macOS 26.7.3 (tier 2), recorded in
+// tests/dmg-license.md. Tests: tests/dmg-license.sh, "answer ..." cases, "empty answer", "-quiet does not agree",
+// "-plist, no answer", "-plist, answer y: text, then the plist" (the text goes to stdout ahead of the plist).
 static bool userAgrees(const struct darling_dmg_license* license, bool quiet)
 {
 	if (quiet)
@@ -259,13 +279,19 @@ static int doAttach(int argc, char** argv)
 	struct darling_dmg_attach_options options = { mountroot.c_str(), mount.empty() ? nullptr : mount.c_str() };
 	char mountPoint[PATH_MAX];
 	err = darling_dmg_attach(image, &options, mountPoint, sizeof(mountPoint));
-	darling_dmg_close(image);
 	if (err != 0)
 	{
 		if (!quiet)
+		{
 			std::cerr << "hdiutil: attach failed - " << strerror(err) << std::endl;
+			const char* messages = darling_dmg_attach_messages(image);
+			if (messages != nullptr)
+				std::cerr << messages << std::endl;
+		}
+		darling_dmg_close(image);
 		return 1;
 	}
+	darling_dmg_close(image);
 
 	g_mountDir = mountPoint;
 	if (!quiet)
@@ -298,7 +324,7 @@ static void printMount()
 		std::cout << "\t\t\t<key>dev-entry</key>" << std::endl;
 		std::cout << "\t\t\t<string>/dev/disk1s1</string>" << std::endl;
 		std::cout << "\t\t\t<key>mount-point</key>" << std::endl;
-		std::cout << "\t\t\t<string>" << g_mountDir << "</string>" << std::endl;
+		std::cout << "\t\t\t<string>" << xmlEscaped(g_mountDir) << "</string>" << std::endl;
 		std::cout << "\t\t\t<key>potentially-mountable</key>" << std::endl;
 		std::cout << "\t\t\t<true/>" << std::endl;
 		std::cout << "\t\t\t<key>unmapped-content-hint</key>" << std::endl;

@@ -32,6 +32,7 @@ set(dmg_sources
 	src/HFSHighLevelVolume.cpp
 	src/DiskImage.cpp
 	src/LicenseAgreement.cpp
+	src/MountPointName.cpp
 )
 
 
@@ -99,6 +100,7 @@ add_library(dmg SHARED
 	src/HFSHighLevelVolume.cpp
 	src/DiskImage.cpp
 	src/LicenseAgreement.cpp
+	src/MountPointName.cpp
 )
 target_compile_features(dmg PRIVATE cxx_std_11)
 target_link_libraries(dmg -licuuc -lcrypto -lz -lbz2 ${LIBXML2_LIBRARY})

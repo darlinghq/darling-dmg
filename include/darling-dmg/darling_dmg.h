@@ -35,6 +35,10 @@ struct darling_dmg_attach_options {
 int darling_dmg_attach(darling_dmg_image* image, const struct darling_dmg_attach_options* options,
 	char* mount_point, size_t mount_point_size);
 
+/* What the file system said when the last darling_dmg_attach on this image failed to mount it (e.g. a FUSE or
+ * fusermount error), UTF-8, possibly several lines; NULL if nothing. Valid until the next attach or close. */
+const char* darling_dmg_attach_messages(darling_dmg_image* image);
+
 /* Unmounts the volume mounted at mount_point (MNT_FORCE when force is non-zero) and removes the mount point
  * directory. ENOENT if nothing is mounted there; otherwise the error unmount(2) failed with. */
 int darling_dmg_detach(const char* mount_point, int force);
