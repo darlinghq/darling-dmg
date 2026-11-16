@@ -3,6 +3,7 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <errno.h>
 #include <fcntl.h>
@@ -11,6 +12,7 @@
 #include <sys/mount.h>
 #include <sys/param.h>
 #include <sys/stat.h>
+#include <sys/file.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -20,6 +22,7 @@
 #include "DiskImage.h"
 #include "DMGDisk.h"
 #include "LicenseAgreement.h"
+#include "MountPointName.h"
 #include "exceptions.h"
 
 extern "C" char** environ;
@@ -34,6 +37,7 @@ struct darling_dmg_image
 	DiskImage image;
 	std::vector<LicenseAgreement> agreements;
 	std::vector<darling_dmg_license> licenses; // views of agreements for the C API
+	std::string attachMessages;                // what the mount helper said when the last attach failed
 };
 
 static void loadLicenses(darling_dmg_image* image)
@@ -64,52 +68,6 @@ static void loadLicenses(darling_dmg_image* image)
 		}
 		image->licenses.push_back(license);
 	}
-}
-
-// The directory name a volume is mounted under: its name as a single path component. HFS names may contain '/',
-// which POSIX paths show as ':' (as macOS mounts a volume named "A/B" at "/Volumes/A:B").
-static std::string mountPointName(const std::string& volumeName)
-{
-	std::string name = volumeName;
-	for (char& c : name)
-	{
-		if (c == '/')
-			c = ':';
-	}
-	if (name.empty() || name == "." || name == "..")
-		name = "untitled";
-	return name;
-}
-
-// QUIRK: when <root>/<name> is taken, the volume is mounted at "<root>/<name> <n>" with the lowest free n, where n
-// starts at 1 in /Volumes but at 2 under any other mount root (hdiutil attach -mountroot). Not documented.
-// Evidence: black-box observation on macOS 26.7.3 (tier 2), recorded in tests/dmg-attach.md.
-// Test: tests/dmg-attach.sh, "two images attached at once" and "same name under -mountroot".
-static unsigned firstSuffixForTakenName(const std::string& mountRoot)
-{
-	return mountRoot == "/Volumes" ? 1 : 2;
-}
-
-// Makes the mount point directory for a volume named name in mountRoot, under a name nothing else has taken.
-static int makeMountPoint(const std::string& mountRoot, const std::string& name, std::string& mountPoint)
-{
-	std::string base = mountRoot == "/" ? "/" + name : mountRoot + "/" + name;
-	mountPoint = base;
-	unsigned suffix = firstSuffixForTakenName(mountRoot);
-
-	while (mkdir(mountPoint.c_str(), 0777) != 0)
-	{
-		if (errno != EEXIST)
-			return errno;
-		// On macOS the system removes a mount point it made in /Volumes once its volume is unmounted, however that
-		// happens. Darling has nothing doing that yet, so a bare unmount(2) leaves the empty directory behind; an
-		// empty directory there with nothing mounted on it is such a leftover and the name is free. (rmdir fails
-		// for a directory that is not empty and for a mount point.)
-		if (mountRoot == "/Volumes" && rmdir(mountPoint.c_str()) == 0)
-			continue;
-		mountPoint = base + " " + std::to_string(suffix++);
-	}
-	return 0;
 }
 
 int darling_dmg_open(const char* path, darling_dmg_image** out)
@@ -220,6 +178,11 @@ void darling_dmg_close(darling_dmg_image* image)
 	delete image;
 }
 
+const char* darling_dmg_attach_messages(darling_dmg_image* image)
+{
+	return image->attachMessages.empty() ? nullptr : image->attachMessages.c_str();
+}
+
 const char* darling_dmg_volume_name(darling_dmg_image* image)
 {
 	return image->volumeName.c_str();
@@ -231,16 +194,18 @@ static bool isMountPoint(const char* path)
 	return statfs(path, &sfs) == 0 && strcmp(sfs.f_mntonname, path) == 0;
 }
 
-// Starts the helper and waits until it reports that the volume is mounted, or why it is not.
-static int runMountHelper(const std::string& imagePath, const std::string& mountPoint)
+// Starts the helper and waits until it reports that the volume is mounted, or why it is not. The helper's stderr
+// is the report pipe: whatever it (FUSE, fusermount) says before the final "<errno>" line is returned in messages.
+static int runMountHelper(const std::string& imagePath, const std::string& mountPoint, std::string& messages)
 {
 	int ready[2];
 	if (pipe(ready) != 0)
 		return errno;
+	// Neither end may leak into processes other threads of the caller start; the helper gets its own copy as stderr.
 	fcntl(ready[0], F_SETFD, FD_CLOEXEC);
+	fcntl(ready[1], F_SETFD, FD_CLOEXEC);
 
-	std::string readyFd = std::to_string(ready[1]);
-	const char* argv[] = { kMountHelper, imagePath.c_str(), mountPoint.c_str(), readyFd.c_str(), nullptr };
+	const char* argv[] = { kMountHelper, imagePath.c_str(), mountPoint.c_str(), "2", nullptr };
 
 	// The helper must not hold on to the caller's standard streams: a caller reading our output through a pipe
 	// would otherwise wait for as long as the volume stays mounted.
@@ -248,7 +213,7 @@ static int runMountHelper(const std::string& imagePath, const std::string& mount
 	posix_spawn_file_actions_init(&actions);
 	posix_spawn_file_actions_addopen(&actions, 0, "/dev/null", O_RDONLY, 0);
 	posix_spawn_file_actions_addopen(&actions, 1, "/dev/null", O_WRONLY, 0);
-	posix_spawn_file_actions_addopen(&actions, 2, "/dev/null", O_WRONLY, 0);
+	posix_spawn_file_actions_adddup2(&actions, ready[1], 2);
 
 	pid_t pid;
 	int err = posix_spawn(&pid, kMountHelper, &actions, nullptr, const_cast<char* const*>(argv), environ);
@@ -266,22 +231,58 @@ static int runMountHelper(const std::string& imagePath, const std::string& mount
 	while (waitpid(pid, &status, 0) < 0 && errno == EINTR)
 		;
 
-	char report[64];
-	size_t length = 0;
-	ssize_t got;
-	while (length < sizeof(report) - 1 && ((got = read(ready[0], report + length, sizeof(report) - 1 - length)) > 0
-		|| (got < 0 && errno == EINTR)))
+	// The child stops writing to the pipe once it has reported, so this reads until it is done.
+	std::string report;
+	char buffer[512];
+	for (;;)
 	{
+		ssize_t got = read(ready[0], buffer, sizeof(buffer));
 		if (got > 0)
-			length += got;
+			report.append(buffer, got);
+		else if (got == 0 || errno != EINTR)
+			break;
 	}
 	close(ready[0]);
-	report[length] = 0;
 
-	if (length == 0 || report[0] < '0' || report[0] > '9')
-		return EIO; // the helper died without saying why
-	return atoi(report);
+	while (!report.empty() && report.back() == '\n')
+		report.pop_back();
+	size_t lastLine = report.rfind('\n');
+	std::string statusLine = report.substr(lastLine == std::string::npos ? 0 : lastLine + 1);
+	std::string before = lastLine == std::string::npos ? std::string() : report.substr(0, lastLine);
+
+	if (statusLine.empty() || statusLine.find_first_not_of("0123456789") != std::string::npos)
+	{
+		messages = report; // the helper died without saying how it ended
+		return EIO;
+	}
+	int result = atoi(statusLine.c_str());
+	if (result != 0)
+		messages = before;
+	return result;
 }
+
+// Keeps other attaches from choosing a mount point name in the same directory until this one's volume is mounted
+// (see makeMountPoint). Advisory; without it (lock unavailable) attaching still works.
+class MountRootLock
+{
+public:
+	explicit MountRootLock(const std::string& mountRoot)
+	{
+		m_fd = open(mountRoot.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+		if (m_fd >= 0)
+		{
+			while (flock(m_fd, LOCK_EX) != 0 && errno == EINTR)
+				;
+		}
+	}
+	~MountRootLock()
+	{
+		if (m_fd >= 0)
+			close(m_fd);
+	}
+private:
+	int m_fd;
+};
 
 int darling_dmg_attach(darling_dmg_image* image, const struct darling_dmg_attach_options* options,
 	char* mount_point, size_t mount_point_size)
@@ -289,6 +290,8 @@ int darling_dmg_attach(darling_dmg_image* image, const struct darling_dmg_attach
 	if (image == nullptr || mount_point == nullptr)
 		return EINVAL;
 
+	image->attachMessages.clear();
+	std::unique_ptr<MountRootLock> lock;
 	std::string mountPoint;
 	bool created;
 	if (options != nullptr && options->mount_point != nullptr)
@@ -313,6 +316,7 @@ int darling_dmg_attach(darling_dmg_image* image, const struct darling_dmg_attach
 		std::string mountRoot = (options != nullptr && options->mount_root != nullptr) ? options->mount_root : "/Volumes";
 		while (mountRoot.size() > 1 && mountRoot.back() == '/')
 			mountRoot.pop_back();
+		lock.reset(new MountRootLock(mountRoot));
 		int err = makeMountPoint(mountRoot, mountPointName(image->volumeName), mountPoint);
 		if (err != 0)
 			return err;
@@ -326,7 +330,7 @@ int darling_dmg_attach(darling_dmg_image* image, const struct darling_dmg_attach
 		return ENAMETOOLONG;
 	}
 
-	int err = runMountHelper(image->path, mountPoint);
+	int err = runMountHelper(image->path, mountPoint, image->attachMessages);
 	if (err != 0)
 	{
 		if (created)

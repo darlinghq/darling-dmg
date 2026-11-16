@@ -33,7 +33,7 @@ DMGPartition::DMGPartition(std::shared_ptr<Reader> disk, BLKXTable* table)
 
 DMGPartition::~DMGPartition()
 {
-	delete m_table;
+	operator delete(m_table); // allocated with operator new(size) by DMGDisk
 }
 
 void DMGPartition::adviseOptimalBlock(uint64_t offset, uint64_t& blockStart, uint64_t& blockEnd)

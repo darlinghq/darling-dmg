@@ -184,13 +184,18 @@ BLKXTable* DMGDisk::loadBLKXTableForPartition(int index)
 
 	if (xpathObj && xpathObj->stringval && *xpathObj->stringval)
 	{
-		// load data from base64
+		// load data from base64; a table that does not decode or is shorter than its runs is unusable
 		std::vector<uint8_t> data;
-		
-		base64Decode((char*)xpathObj->stringval, data);
-		rv = static_cast<BLKXTable*>(operator new(data.size()));
-		
-		memcpy(rv, &data[0], data.size());
+
+		if (base64Decode((char*)xpathObj->stringval, data) && data.size() >= sizeof(BLKXTable))
+		{
+			const BLKXTable* table = reinterpret_cast<const BLKXTable*>(data.data());
+			if ((data.size() - sizeof(BLKXTable)) / sizeof(BLKXRun) >= be(table->blocksRunCount))
+			{
+				rv = static_cast<BLKXTable*>(operator new(data.size()));
+				memcpy(rv, data.data(), data.size());
+			}
+		}
 	}
 
 	xmlXPathFreeObject(xpathObj);
@@ -263,7 +268,10 @@ bool DMGDisk::base64Decode(const std::string& input, std::vector<uint8_t>& outpu
 
 std::shared_ptr<Reader> DMGDisk::readerForPartition(int index)
 {
-	for (int i = -1;; i++)
+	// Partition data tables are numbered from -1 up; a damaged image may lack the one asked for.
+	const int lastTableID = int(m_partitions.size()) + 256;
+
+	for (int i = -1; i <= lastTableID; i++)
 	{
 		BLKXTable* table = loadBLKXTableForPartition(i);
 		
@@ -293,10 +301,10 @@ std::shared_ptr<Reader> DMGDisk::readerForPartition(int index)
 			}
 		}
 		
-		delete table;
+		operator delete(table); // allocated with operator new(size) in loadBLKXTableForPartition
 	}
-	
-	return nullptr;
+
+	throw io_error("No usable partition data in the image");
 }
 
 std::shared_ptr<Reader> DMGDisk::readerForKolyBlock(int index)

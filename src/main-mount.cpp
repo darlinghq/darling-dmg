@@ -2,8 +2,9 @@
 //
 // Usage: darling-dmg-mount <image> <mount point> <ready fd>
 //
-// Once the volume is mounted, "0\n" is written to <ready fd>; if it cannot be mounted, "<errno>\n" is. Either way
-// the descriptor is closed afterwards. The process that started the helper gets its exit status right away: the
+// <ready fd> is normally 2: until the helper reports, its stderr (and so whatever FUSE or fusermount print) goes
+// to the attaching process. Once the volume is mounted, "0\n" is written to it; if it cannot be mounted,
+// "<errno>\n" is. Either way the descriptor is then pointed at /dev/null. The process that started the helper gets its exit status right away: the
 // file system runs in a child in a session of its own, so it outlives whoever attached the image.
 #include <cstdlib>
 #include <cstring>
@@ -33,7 +34,15 @@ static void reportMount(int err)
 		return;
 	std::string report = std::to_string(err) + "\n";
 	write(g_readyFd, report.c_str(), report.size());
-	close(g_readyFd);
+
+	int devNull = open("/dev/null", O_WRONLY);
+	if (devNull >= 0)
+	{
+		dup2(devNull, g_readyFd);
+		close(devNull);
+	}
+	else
+		close(g_readyFd);
 	g_readyFd = -1;
 }
 
@@ -74,7 +83,6 @@ int main(int argc, char** argv)
 		return 2;
 
 	g_readyFd = atoi(argv[3]);
-	fcntl(g_readyFd, F_SETFD, FD_CLOEXEC);
 	for (int fd = getdtablesize() - 1; fd > 2; fd--)
 	{
 		if (fd != g_readyFd)

@@ -60,7 +60,9 @@ int main(int argc, const char** argv)
 		fuse_opt_add_arg(&args, "-oro");
 		fuse_opt_add_arg(&args, "-s");
 	
+#ifndef BEFORE_MOUNT_EXTRA // the mount helper reports through its stderr, which must only carry errors
 		std::cerr << "Everything looks OK, disk mounted\n";
+#endif
 
 #ifdef BEFORE_MOUNT_EXTRA // Darling only
 		BEFORE_MOUNT_EXTRA;
