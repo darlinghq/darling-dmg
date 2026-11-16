@@ -1,4 +1,5 @@
 #include <iostream>
+#include <cstdio>
 #include <cstring>
 #include <string>
 #include <errno.h>
@@ -11,9 +12,10 @@
 #include <vector>
 
 #include <CoreFoundation/CoreFoundation.h>
+#include <DiskArbitration/DiskArbitration.h>
 #include <darling-dmg/darling_dmg.h>
 
-static void printMount();
+static void printMount(const std::string& scheme);
 
 static void printHelp();
 static int doAttach(int argc, char** argv);
@@ -291,16 +293,65 @@ static int doAttach(int argc, char** argv)
 		darling_dmg_close(image);
 		return 1;
 	}
+	std::string scheme = darling_dmg_partition_scheme(image);
 	darling_dmg_close(image);
 
 	g_mountDir = mountPoint;
 	if (!quiet)
-		printMount();
+		printMount(scheme);
 	return 0;
 }
 
-static void printMount()
+// The BSD names DiskArbitration gives the volume mounted at mountPoint and its whole disk; false if it does not
+// know the volume.
+static bool diskNames(const char* mountPoint, std::string& leaf, std::string& whole)
 {
+	DASessionRef session = DASessionCreate(NULL);
+	if (session == NULL)
+		return false;
+
+	CFURLRef url = CFURLCreateFromFileSystemRepresentation(NULL, (const UInt8*) mountPoint, strlen(mountPoint), true);
+	DADiskRef disk = url != NULL ? DADiskCreateFromVolumePath(NULL, session, url) : NULL;
+	DADiskRef wholeDisk = disk != NULL ? DADiskCopyWholeDisk(disk) : NULL;
+	bool found = disk != NULL && wholeDisk != NULL && DADiskGetBSDName(disk) != NULL && DADiskGetBSDName(wholeDisk) != NULL;
+	if (found)
+	{
+		leaf = DADiskGetBSDName(disk);
+		whole = DADiskGetBSDName(wholeDisk);
+	}
+
+	if (wholeDisk != NULL)
+		CFRelease(wholeDisk);
+	if (disk != NULL)
+		CFRelease(disk);
+	if (url != NULL)
+		CFRelease(url);
+	CFRelease(session);
+	return found;
+}
+
+static void printTableLine(const std::string& device, const std::string& hint, const std::string& mountPoint)
+{
+	printf("%-20s\t%-31s\t%s\n", device.c_str(), hint.c_str(), mountPoint.c_str());
+}
+
+static void printPlistString(const char* key, const std::string& value)
+{
+	std::cout << "\t\t\t<key>" << key << "</key>" << std::endl;
+	std::cout << "\t\t\t<string>" << xmlEscaped(value) << "</string>" << std::endl;
+}
+
+// What attach prints, as on macOS (tests/dmg-attach.md): a line for the whole disk with its partition scheme, then
+// one for the volume's partition with its mount point; with -plist, the volume's entry and then the whole disk's.
+// Darling's disks always have the volume on the first partition, also for an image without a partition map (its
+// whole disk then has no scheme). If DiskArbitration does not know the volume, only the mount point is given.
+static void printMount(const std::string& scheme)
+{
+	std::string leaf, whole;
+	bool named = diskNames(g_mountDir.c_str(), leaf, whole);
+	// the type of the volume's partition in the map
+	std::string unmappedHint = scheme == "GUID_partition_scheme" ? "48465300-0000-11AA-AA11-00306543ECAC" : "Apple_HFS";
+
 	if (plist) {
 		std::cout << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" << std::endl;
 		std::cout << "<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">" << std::endl;
@@ -309,59 +360,153 @@ static void printMount()
 		std::cout << "\t<key>system-entities</key>" << std::endl;
 		std::cout << "\t<array>" << std::endl;
 		std::cout << "\t\t<dict>" << std::endl;
-    std::cout << "\t\t\t<key>content-hint</key>" << std::endl;
-    std::cout << "\t\t\t<string>GUID_partition_scheme</string>" << std::endl;
-    std::cout << "\t\t\t<key>dev-entry</key>" << std::endl;
-    std::cout << "\t\t\t<string>/dev/disk1</string>" << std::endl;
-    std::cout << "\t\t\t<key>potentially-mountable</key>" << std::endl;
-    std::cout << "\t\t\t<false/>" << std::endl;
-    std::cout << "\t\t\t<key>unmapped-content-hint</key>" << std::endl;
-    std::cout << "\t\t\t<string>GUID_partition_scheme</string>" << std::endl;
-    std::cout << "\t\t</dict>" << std::endl;
-		std::cout << "\t\t<dict>" << std::endl;
-		std::cout << "\t\t\t<key>content-hint</key>" << std::endl;
-		std::cout << "\t\t\t<string>Apple_HFS</string>" << std::endl;
-		std::cout << "\t\t\t<key>dev-entry</key>" << std::endl;
-		std::cout << "\t\t\t<string>/dev/disk1s1</string>" << std::endl;
-		std::cout << "\t\t\t<key>mount-point</key>" << std::endl;
-		std::cout << "\t\t\t<string>" << xmlEscaped(g_mountDir) << "</string>" << std::endl;
+		printPlistString("content-hint", "Apple_HFS");
+		if (named)
+			printPlistString("dev-entry", "/dev/" + leaf);
+		printPlistString("mount-point", g_mountDir);
 		std::cout << "\t\t\t<key>potentially-mountable</key>" << std::endl;
 		std::cout << "\t\t\t<true/>" << std::endl;
-		std::cout << "\t\t\t<key>unmapped-content-hint</key>" << std::endl;
-		std::cout << "\t\t\t<string>48465300-0000-11AA-AA11-00306543ECAC</string>" << std::endl;
-		std::cout << "\t\t\t<key>volume-kind</key>" << std::endl;
-		std::cout << "\t\t\t<string>hfs</string>" << std::endl;
+		printPlistString("unmapped-content-hint", unmappedHint);
+		printPlistString("volume-kind", "hfs");
 		std::cout << "\t\t</dict>" << std::endl;
+		if (named) {
+			std::cout << "\t\t<dict>" << std::endl;
+			printPlistString("content-hint", scheme);
+			printPlistString("dev-entry", "/dev/" + whole);
+			std::cout << "\t\t\t<key>potentially-mountable</key>" << std::endl;
+			std::cout << "\t\t\t<false/>" << std::endl;
+			printPlistString("unmapped-content-hint", scheme);
+			std::cout << "\t\t</dict>" << std::endl;
+		}
 		std::cout << "\t</array>" << std::endl;
 		std::cout << "</dict>" << std::endl;
 		std::cout << "</plist>" << std::endl;
-	} else if (!puppetstrings) {
-		std::cout << g_mountDir << std::endl;
+	} else if (named) {
+		printTableLine("/dev/" + whole, scheme, "");
+		printTableLine("/dev/" + leaf, "Apple_HFS", g_mountDir);
 	} else {
-		// FIXME: This is kind of fake...
-		// puppetstrings should produce output like:
-		// /dev/disk1              GUID_partition_scheme           
-		// /dev/disk1s1            Apple_HFS                       /Volumes/MachOView
-		std::cout << "/dev/disk1\tGUID_partition_scheme\t\n";
-		std::cout << "/dev/disk1s1\tApple_HFS\t" << g_mountDir << std::endl;
+		std::cout << g_mountDir << std::endl;
+	}
+	fflush(stdout);
+}
+
+struct RequestResult
+{
+	bool done;
+	DAReturn status;
+	std::string string; // the dissenter's status string, if it has one
+};
+
+static void requestDone(DADiskRef disk, DADissenterRef dissenter, void* context)
+{
+	RequestResult* result = (RequestResult*) context;
+	result->done = true;
+	result->status = dissenter != NULL ? DADissenterGetStatus(dissenter) : kDAReturnSuccess;
+	CFStringRef string = dissenter != NULL ? DADissenterGetStatusString(dissenter) : NULL;
+	char text[1024];
+	if (string != NULL && CFStringGetCString(string, text, sizeof(text), kCFStringEncodingUTF8))
+		result->string = text;
+}
+
+// Runs the session's run loop until the request is done.
+static void waitFor(const RequestResult& result)
+{
+	while (!result.done)
+		CFRunLoopRunInMode(kCFRunLoopDefaultMode, 1, true);
+}
+
+// The errno hdiutil reports for a failed unmount or eject.
+static int errnoForStatus(DAReturn status)
+{
+	if ((status & 0xFFFFFF00) == 0xC000)
+		return status & 0xFF; // the errno the unmount failed with (see diskarbitrationd's DAOperations.c)
+	switch (status)
+	{
+		case kDAReturnBusy: return EBUSY;
+		case kDAReturnBadArgument: return EINVAL;
+		case kDAReturnNotPrivileged: return EPERM;
+		case kDAReturnNotMounted: return EINVAL;
+		case kDAReturnUnsupported: return ENOTSUP;
+		default: return EIO;
 	}
 }
 
-
-// The name a detach message gives the image. macOS names the disk ("disk5"); until disk images have disk names
-// here, the mount point stands in for it.
-static std::string detachName(const char* mountPoint)
+// Reports a failed request, as on macOS: the dissenter's string (if any) on stdout without a newline, then the
+// error on stderr. Returns the exit status, the low byte of the request's status.
+static int requestFailed(const char* verb, const std::string& name, const RequestResult& result, bool quiet)
 {
-	return mountPoint;
+	if (!quiet)
+	{
+		std::cout << result.string << std::flush;
+		std::cerr << "hdiutil: couldn't " << verb << " \"" << name << "\" - " << strerror(errnoForStatus(result.status)) << std::endl;
+	}
+	return result.status & 0xFF;
 }
 
-// Detaches the disk image mounted at the given path. Messages and exit statuses follow hdiutil on macOS:
-// '"<disk>" ejected.' on success; on a failed unmount 'couldn't unmount "<disk>" - <error>' and the errno as the
-// exit status; 'detach failed - No such file or directory' and status 1 for a path no image is mounted on.
+// The disk a detach argument names: a /dev/ disk name, or the mount point of a volume. NULL if DiskArbitration
+// knows no such disk.
+static DADiskRef diskForArgument(DASessionRef session, const char* argument)
+{
+	if (strncmp(argument, "/dev/", 5) == 0)
+	{
+		DADiskRef disk = DADiskCreateFromBSDName(NULL, session, argument + 5);
+		CFDictionaryRef description = disk != NULL ? DADiskCopyDescription(disk) : NULL;
+		if (description == NULL)
+		{
+			if (disk != NULL)
+				CFRelease(disk);
+			return NULL;
+		}
+		CFRelease(description);
+		return disk;
+	}
+
+	char path[PATH_MAX];
+	if (realpath(argument, path) == nullptr)
+		return NULL;
+	CFURLRef url = CFURLCreateFromFileSystemRepresentation(NULL, (const UInt8*) path, strlen(path), true);
+	if (url == NULL)
+		return NULL;
+	DADiskRef disk = DADiskCreateFromVolumePath(NULL, session, url);
+	CFRelease(url);
+	return disk;
+}
+
+// Detaches the volume mounted at path, which DiskArbitration does not know (it is outside the guest's tree, which
+// getfsstat lists), with the disk image library. The mount point names the image in the messages.
+static int detachUnknownVolume(const char* argument, bool force, bool quiet)
+{
+	char path[PATH_MAX];
+	struct statfs sfs;
+	if (strncmp(argument, "/dev/", 5) == 0 || realpath(argument, path) == nullptr || statfs(path, &sfs) != 0
+		|| strcmp(sfs.f_mntonname, path) != 0)
+	{
+		if (!quiet)
+			std::cerr << "hdiutil: detach failed - " << strerror(ENOENT) << std::endl;
+		return 1;
+	}
+
+	int err = darling_dmg_detach(path, force);
+	if (err != 0)
+	{
+		if (!quiet)
+			std::cerr << "hdiutil: couldn't unmount \"" << path << "\" - " << strerror(err) << std::endl;
+		return err;
+	}
+	if (!quiet)
+		std::cout << "\"" << path << "\" ejected." << std::endl;
+	return 0;
+}
+
+// Detaches the disk image a mount point or /dev/ disk name belongs to, through DiskArbitration: its whole disk is
+// unmounted (forcibly with -force), then ejected. Messages and exit statuses follow hdiutil on macOS
+// (tests/dmg-attach.md): '"<disk>" ejected.' on success; 'detach failed - No such file or directory' and status 1
+// for something that is not a disk; otherwise 'couldn't unmount|eject "<disk>" - <error>'. A volume DiskArbitration
+// does not know is detached without it.
 static int doDetach(int argc, char** argv)
 {
 	bool quiet = false;
-	int flags = 0;
+	bool force = false;
 
 	if (argc < 3)
 		printHelp();
@@ -385,7 +530,7 @@ static int doDetach(int argc, char** argv)
 				quiet = true;
 				break;
 			case 2:
-				flags |= MNT_FORCE;
+				force = true;
 				break;
 			case 0:
 				break;
@@ -397,25 +542,44 @@ static int doDetach(int argc, char** argv)
 	if (optind != argc - 1)
 		printHelp();
 
-	char path[PATH_MAX];
-	struct statfs sfs;
-	if (realpath(argv[optind], path) == nullptr || statfs(path, &sfs) != 0 || strcmp(sfs.f_mntonname, path) != 0)
+	DASessionRef session = DASessionCreate(NULL);
+	DADiskRef disk = session != NULL ? diskForArgument(session, argv[optind]) : NULL;
+	DADiskRef whole = disk != NULL ? DADiskCopyWholeDisk(disk) : NULL;
+	if (whole == NULL || DADiskGetBSDName(whole) == NULL)
 	{
-		if (!quiet)
-			std::cerr << "hdiutil: detach failed - " << strerror(ENOENT) << std::endl;
-		return 1;
+		if (whole != NULL)
+			CFRelease(whole);
+		if (disk != NULL)
+			CFRelease(disk);
+		if (session != NULL)
+			CFRelease(session);
+		return detachUnknownVolume(argv[optind], force, quiet);
+	}
+	std::string name = DADiskGetBSDName(whole);
+	DASessionScheduleWithRunLoop(session, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
+
+	int exitStatus = 0;
+	RequestResult unmounted = {};
+	DADiskUnmount(whole, kDADiskUnmountOptionWhole | (force ? kDADiskUnmountOptionForce : 0), requestDone, &unmounted);
+	waitFor(unmounted);
+	if (unmounted.status != kDAReturnSuccess)
+	{
+		exitStatus = requestFailed("unmount", name, unmounted, quiet);
+	}
+	else
+	{
+		RequestResult ejected = {};
+		DADiskEject(whole, kDADiskEjectOptionDefault, requestDone, &ejected);
+		waitFor(ejected);
+		if (ejected.status != kDAReturnSuccess)
+			exitStatus = requestFailed("eject", name, ejected, quiet);
+		else if (!quiet)
+			std::cout << "\"" << name << "\" ejected." << std::endl;
 	}
 
-	std::string name = detachName(path);
-	int err = darling_dmg_detach(path, (flags & MNT_FORCE) != 0);
-	if (err != 0)
-	{
-		if (!quiet)
-			std::cerr << "hdiutil: couldn't unmount \"" << name << "\" - " << strerror(err) << std::endl;
-		return err;
-	}
-
-	if (!quiet)
-		std::cout << "\"" << name << "\" ejected." << std::endl;
-	return 0;
+	DASessionUnscheduleFromRunLoop(session, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
+	CFRelease(whole);
+	CFRelease(disk);
+	CFRelease(session);
+	return exitStatus;
 }

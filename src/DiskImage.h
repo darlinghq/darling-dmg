@@ -18,4 +18,8 @@ struct DiskImage
 // image this code reads or has no HFS+ volume, and the reader exceptions for damaged images.
 void openDiskImage(const char* path, DiskImage& image);
 
+// The partition scheme of the image's whole disk, named as macOS's hdiutil names it: "GUID_partition_scheme",
+// "Apple_partition_scheme", or "" if the image has no partition map (its volume is the whole disk).
+std::string partitionScheme(const DiskImage& image);
+
 #endif

@@ -25,6 +25,10 @@ void darling_dmg_close(darling_dmg_image* image);
 /* The name of the volume in the image, UTF-8. Valid until darling_dmg_close. */
 const char* darling_dmg_volume_name(darling_dmg_image* image);
 
+/* The partition scheme of the image's whole disk: "GUID_partition_scheme", "Apple_partition_scheme", or "" for an
+ * image without a partition map. Valid until darling_dmg_close. */
+const char* darling_dmg_partition_scheme(darling_dmg_image* image);
+
 struct darling_dmg_attach_options {
 	const char* mount_root;  /* directory the mount point is made in; NULL means "/Volumes" */
 	const char* mount_point; /* exact mount point; NULL means one is made in mount_root from the volume name */

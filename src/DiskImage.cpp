@@ -35,3 +35,23 @@ void openDiskImage(const char* path, DiskImage& image)
 
 	throw function_not_implemented_error("No suitable partition found in file");
 }
+
+std::string partitionScheme(const DiskImage& image)
+{
+	if (!image.partitions)
+		return "";
+	if (dynamic_cast<const GPTDisk*>(image.partitions.get()) != nullptr)
+		return "GUID_partition_scheme";
+	if (dynamic_cast<const AppleDisk*>(image.partitions.get()) != nullptr)
+		return "Apple_partition_scheme";
+
+	// a UDIF image lists the parts of its map in its own partition table
+	for (const PartitionedDisk::Partition& part : image.partitions->partitions())
+	{
+		if (part.type == "Apple_partition_map")
+			return "Apple_partition_scheme";
+		if (part.type == "Primary GPT Header")
+			return "GUID_partition_scheme";
+	}
+	return "";
+}

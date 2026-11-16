@@ -34,6 +34,7 @@ struct darling_dmg_image
 {
 	std::string path;
 	std::string volumeName;
+	std::string partitionScheme;
 	DiskImage image;
 	std::vector<LicenseAgreement> agreements;
 	std::vector<darling_dmg_license> licenses; // views of agreements for the C API
@@ -100,6 +101,7 @@ int darling_dmg_open(const char* path, darling_dmg_image** out)
 	{
 		openDiskImage(absolute, image->image);
 		image->volumeName = image->image.volume->volumeName();
+		image->partitionScheme = partitionScheme(image->image);
 		loadLicenses(image);
 	}
 	catch (const io_error&)
@@ -186,6 +188,11 @@ const char* darling_dmg_attach_messages(darling_dmg_image* image)
 const char* darling_dmg_volume_name(darling_dmg_image* image)
 {
 	return image->volumeName.c_str();
+}
+
+const char* darling_dmg_partition_scheme(darling_dmg_image* image)
+{
+	return image->partitionScheme.c_str();
 }
 
 static bool isMountPoint(const char* path)
