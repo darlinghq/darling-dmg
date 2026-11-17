@@ -134,6 +134,8 @@ else (NOT DARLING)
 		src/main-hdiutil.cpp
 	)
 
+	# links the LibreSSL 2.8.3 libcrypto.44, so compile against its headers
+	target_include_directories(hdiutil BEFORE PRIVATE ${CMAKE_SOURCE_DIR}/src/external/libressl-2.8.3/include)
 	target_link_libraries(hdiutil fuse icucore z bz2 crypto44 xml2 iconv lzfse)
 	install(TARGETS hdiutil DESTINATION libexec/darling/usr/bin)
 
