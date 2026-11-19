@@ -9,7 +9,7 @@ class DMGDecompressor
 {
 protected:
 	DMGDecompressor(std::shared_ptr<Reader> reader);
-	int readSome(char** ptr);
+	int32_t readSome(char** ptr);
 	void processed(int bytes);
 	uint64_t readerLength() const { return m_reader->length(); }
 public:
@@ -19,7 +19,7 @@ public:
 	static DMGDecompressor* create(RunType runType, std::shared_ptr<Reader> reader);
 private:
 	std::shared_ptr<Reader> m_reader;
-	uint32_t m_pos;
+	uint64_t m_pos;
 	char m_buf[8*1024];
 };
 
