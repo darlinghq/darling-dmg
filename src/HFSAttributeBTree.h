@@ -11,7 +11,7 @@
 class HFSAttributeBTree : protected HFSBTree
 {
 public:
-	HFSAttributeBTree(std::shared_ptr<HFSFork> fork, CacheZone* zone);
+	HFSAttributeBTree(std::shared_ptr<HFSFork> fork, std::shared_ptr<CacheZone> zone);
 	
 	typedef std::map<std::string, std::vector<uint8_t>> AttributeMap;
 	

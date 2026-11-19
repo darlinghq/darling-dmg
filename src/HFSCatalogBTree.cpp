@@ -10,7 +10,7 @@ static const int MAX_SYMLINKS = 50;
 
 extern UConverter *g_utf16be;
 
-HFSCatalogBTree::HFSCatalogBTree(std::shared_ptr<HFSFork> fork, HFSVolume* volume, CacheZone* zone)
+HFSCatalogBTree::HFSCatalogBTree(std::shared_ptr<HFSFork> fork, HFSVolume* volume, std::shared_ptr<CacheZone> zone)
 	: HFSBTree(fork, zone, "Catalog"), m_volume(volume), m_hardLinkDirID(0)
 {
 	HFSPlusCatalogFileOrFolder ff;
@@ -265,7 +265,6 @@ int HFSCatalogBTree::stat(std::string path, HFSPlusCatalogFileOrFolder* s)
 
 	return 0;
 }
-extern int mustbreak;
 
 void HFSCatalogBTree::appendNameAndHFSPlusCatalogFileOrFolderFromLeafForParentId(std::shared_ptr<HFSBTreeNode> leafNodePtr, HFSCatalogNodeID cnid, std::map<std::string, std::shared_ptr<HFSPlusCatalogFileOrFolder>>& map)
 {

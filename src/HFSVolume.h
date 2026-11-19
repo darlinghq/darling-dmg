@@ -27,8 +27,8 @@ public:
 	
 	static bool isHFSPlus(std::shared_ptr<Reader> reader);
 	
-	inline CacheZone* getFileZone() { return &m_fileZone; }
-	inline CacheZone* getBtreeZone() { return &m_btreeZone; }
+	inline std::shared_ptr<CacheZone> getFileZone() { return m_fileZone; }
+	inline std::shared_ptr<CacheZone> getBtreeZone() { return m_btreeZone; }
 private:
 	void processEmbeddedHFSPlus(HFSMasterDirectoryBlock* block);
 private:
@@ -37,7 +37,7 @@ private:
 	HFSExtentsOverflowBTree* m_overflowExtents;
 	HFSAttributeBTree* m_attributes;
 	HFSPlusVolumeHeader m_header;
-	CacheZone m_fileZone, m_btreeZone;
+	std::shared_ptr<CacheZone> m_fileZone, m_btreeZone;
 	
 	friend class HFSBTree;
 	friend class HFSFork;

@@ -7,7 +7,7 @@
 
 //#define NO_CACHE
 
-CachedReader::CachedReader(std::shared_ptr<Reader> reader, CacheZone* zone, const std::string& tag)
+CachedReader::CachedReader(std::shared_ptr<Reader> reader, std::shared_ptr<CacheZone> zone, const std::string& tag)
 : m_reader(reader), m_zone(zone), m_tag(tag)
 {
 }
