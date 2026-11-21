@@ -288,8 +288,10 @@ std::vector<uint8_t> HFSHighLevelVolume::getXattr(const std::string& path, const
 		uint8_t buf[32];
 		const char zero[32] = { 0 };
 		getXattrFinderInfo(ff, buf);
-		if (  memcmp(buf, zero, 32) != 0 ) // push FinderInfo only is non zero
-			output.insert(output.end(), reinterpret_cast<uint8_t*>(buf), reinterpret_cast<uint8_t*>(buf)+32);
+		// An item whose FinderInfo is all zeros has none, as listXattr says (macOS: ENOATTR)
+		if (  memcmp(buf, zero, 32) == 0 )
+			throw attribute_not_found_error();
+		output.insert(output.end(), reinterpret_cast<uint8_t*>(buf), reinterpret_cast<uint8_t*>(buf)+32);
 	}
 	else
 	{

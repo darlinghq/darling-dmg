@@ -110,7 +110,21 @@ void openDisk(const char* path)
 	image.volume->usage(g_totalBytes, g_freeBytes);
 }
 
+static int handle_exceptions_bsd(std::function<int()> func);
+
+// Runs a FUSE operation; a negative result is an error number for the kernel
 int handle_exceptions(std::function<int()> func)
+{
+	int result = handle_exceptions_bsd(func);
+#ifdef DARLING
+	if (result < 0)
+		result = -bsd_errno_to_linux(-result);
+#endif
+	return result;
+}
+
+// The operation's result, with Darwin error numbers (this module's own headers' ones)
+static int handle_exceptions_bsd(std::function<int()> func)
 {
 	try
 	{
@@ -288,7 +302,16 @@ int hfs_getxattr(const char* path, const char* name, char* value, size_t vlen)
 		std::vector<uint8_t> data;
 
 		if (!volumeAttribute(path, name, data))
+		{
+#ifdef DARLING
+			// A guest's attribute "<name>" is "user.<name>" here; the volume has no others
+			if (strncmp(name, LINUX_XATTR_GUEST_PREFIX, strlen(LINUX_XATTR_GUEST_PREFIX)) != 0)
+				return -ENODATA;
+			data = g_volume->getXattr(path, name + strlen(LINUX_XATTR_GUEST_PREFIX));
+#else
 			data = g_volume->getXattr(path, name);
+#endif
+		}
 
 		if (value == nullptr)
 			return data.size();
@@ -325,7 +348,13 @@ int hfs_listxattr(const char* path, char* buffer, size_t size)
 		attrs = g_volume->listXattr(path);
 
 		for (const std::string& str : attrs)
+		{
+#ifdef DARLING
+			const char* prefix = LINUX_XATTR_GUEST_PREFIX;
+			output.insert(output.end(), prefix, prefix + strlen(prefix));
+#endif
 			output.insert(output.end(), str.c_str(), str.c_str() + str.length() + 1);
+		}
 
 		if (buffer == nullptr)
 			return output.size();
