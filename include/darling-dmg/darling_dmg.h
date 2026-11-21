@@ -34,10 +34,15 @@ struct darling_dmg_attach_options {
 	const char* mount_point; /* exact mount point; NULL means one is made in mount_root from the volume name */
 };
 
-/* Mounts the image's volume read-only. The volume stays mounted after the calling process exits.
+/* Mounts the image's volume read-only. The volume stays mounted after the calling process exits. When the image is
+ * attached already, nothing is mounted: its mount point is returned and the options are ignored.
  * The mount point used is written to mount_point (NUL-terminated); ENAMETOOLONG if it does not fit. */
 int darling_dmg_attach(darling_dmg_image* image, const struct darling_dmg_attach_options* options,
 	char* mount_point, size_t mount_point_size);
+
+/* The mount point of the image's volume when the image (the file it was opened from, symbolic links resolved) is
+ * attached already, NUL-terminated. ENOENT when it is not attached; ENAMETOOLONG if the mount point does not fit. */
+int darling_dmg_attached_mount_point(darling_dmg_image* image, char* mount_point, size_t mount_point_size);
 
 /* What the file system said when the last darling_dmg_attach on this image failed to mount it (e.g. a FUSE or
  * fusermount error), UTF-8, possibly several lines; NULL if nothing. Valid until the next attach or close. */

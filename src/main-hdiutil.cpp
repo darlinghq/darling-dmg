@@ -261,7 +261,10 @@ static int doAttach(int argc, char** argv)
 		return 1;
 	}
 
-	if (darling_dmg_license_count(image) > 0)
+	// An image that is attached already is not asked about again: attaching it gives its volume (macOS 26.7.3).
+	char attachedPoint[PATH_MAX];
+	if (darling_dmg_license_count(image) > 0
+		&& darling_dmg_attached_mount_point(image, attachedPoint, sizeof(attachedPoint)) == ENOENT)
 	{
 		std::vector<std::string> languages = preferredLanguages();
 		std::vector<const char*> preferred;

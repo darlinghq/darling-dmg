@@ -201,6 +201,38 @@ static bool isMountPoint(const char* path)
 	return statfs(path, &sfs) == 0 && strcmp(sfs.f_mntonname, path) == 0;
 }
 
+// The mount point of the volume darling-dmg mounted from the file at path (a real path), or "". A disk image's volume
+// is mounted from its file, and names its macOS kind ("hfs") through the kernel layer instead of "fuse.<subtype>",
+// the test diskarbitrationd uses too.
+static std::string attachedMountPoint(const std::string& path)
+{
+	int count = getfsstat(nullptr, 0, MNT_NOWAIT);
+	if (count <= 0)
+		return std::string();
+	std::vector<struct statfs> volumes(count + 8);
+	count = getfsstat(volumes.data(), volumes.size() * sizeof(struct statfs), MNT_NOWAIT);
+	for (int i = 0; i < count; i++)
+	{
+		const struct statfs& volume = volumes[i];
+		if (path == volume.f_mntfromname && strncmp(volume.f_fstypename, "fuse", 4) != 0)
+			return volume.f_mntonname;
+	}
+	return std::string();
+}
+
+int darling_dmg_attached_mount_point(darling_dmg_image* image, char* mount_point, size_t mount_point_size)
+{
+	if (image == nullptr || mount_point == nullptr)
+		return EINVAL;
+	std::string attached = attachedMountPoint(image->path);
+	if (attached.empty())
+		return ENOENT;
+	if (attached.size() + 1 > mount_point_size)
+		return ENAMETOOLONG;
+	strcpy(mount_point, attached.c_str());
+	return 0;
+}
+
 // Starts the helper and waits until it reports that the volume is mounted, or why it is not. The helper's stderr
 // is the report pipe: whatever it (FUSE, fusermount) says before the final "<errno>" line is returned in messages.
 static int runMountHelper(const std::string& imagePath, const std::string& mountPoint, std::string& messages)
@@ -298,6 +330,11 @@ int darling_dmg_attach(darling_dmg_image* image, const struct darling_dmg_attach
 		return EINVAL;
 
 	image->attachMessages.clear();
+	// As hdiutil attach does on macOS, an image that is attached already is not mounted again.
+	int attached = darling_dmg_attached_mount_point(image, mount_point, mount_point_size);
+	if (attached != ENOENT)
+		return attached;
+
 	std::unique_ptr<MountRootLock> lock;
 	std::string mountPoint;
 	bool created;
