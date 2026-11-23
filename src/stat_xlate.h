@@ -1,6 +1,8 @@
 #ifndef _STAT_XLATE_H
 #define _STAT_XLATE_H
 
+#include <errno.h>
+
 // THIS FILE IS ONLY USED UNDER DARLING.
 //
 // Explanation:
@@ -56,5 +58,23 @@ static inline void bsd_stat_to_linux_stat(const struct stat* in, struct linux_st
 	out->st_ctime_nsec = in->st_ctimespec.tv_nsec;
 }
 
-#endif
+// For the same reason, the error numbers this module returns to libfuse (for the
+// Linux kernel) are Darwin ones and must be translated: most are the same, but
+// not ENODATA (96 on Darwin, 61 on Linux) or ENOSYS (78, 38).
+static inline int bsd_errno_to_linux(int error)
+{
+	switch (error)
+	{
+		case ENODATA: return 61;
+		case ENOSYS: return 38;
+		case ENOTSUP: return 95;
+		default: return error; // EPERM ENOENT EIO ENOMEM EACCES ENOTDIR EISDIR EINVAL ERANGE
+	}
+}
 
+// Extended attribute names: Darling's kernel layer keeps every Darwin attribute
+// "<name>" as "user.<name>" on the host, and shows guests only "user." ones. This
+// volume's attributes are Darwin ones, so they are listed and looked up that way.
+#define LINUX_XATTR_GUEST_PREFIX "user."
+
+#endif

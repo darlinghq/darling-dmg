@@ -15,13 +15,18 @@
 #include "CachedReader.h"
 #include "exceptions.h"
 #include "HFSHighLevelVolume.h"
+#include "DiskImage.h"
 #ifdef DARLING
 #	include "stat_xlate.h"
 #endif
 
-std::shared_ptr<Reader> g_fileReader;
 std::unique_ptr<HFSHighLevelVolume> g_volume;
-std::unique_ptr<PartitionedDisk> g_partitions;
+
+// The volume's name, given to Darling's kernel layer (see volumeAttribute).
+static std::string g_volumeName;
+// Its size and free space, for statfs.
+static uint32_t g_blockSize;
+static uint64_t g_totalBytes, g_freeBytes;
 
 int main(int argc, const char** argv)
 {
@@ -50,6 +55,7 @@ int main(int argc, const char** argv)
 		//ops.releasedir = hfs_releasedir;
 		ops.getxattr = hfs_getxattr;
 		ops.listxattr = hfs_listxattr;
+		ops.statfs = hfs_statfs;
 	
 		for (int i = 0; i < argc; i++)
 		{
@@ -61,7 +67,9 @@ int main(int argc, const char** argv)
 		fuse_opt_add_arg(&args, "-oro");
 		fuse_opt_add_arg(&args, "-s");
 	
+#ifndef BEFORE_MOUNT_EXTRA // the mount helper reports through its stderr, which must only carry errors
 		std::cerr << "Everything looks OK, disk mounted\n";
+#endif
 
 #ifdef BEFORE_MOUNT_EXTRA // Darling only
 		BEFORE_MOUNT_EXTRA;
@@ -93,48 +101,30 @@ void showHelp(const char* argv0)
 
 void openDisk(const char* path)
 {
-	int partIndex = -1;
-	std::shared_ptr<HFSVolume> volume;
+	static DiskImage image;
 
-	g_fileReader.reset(new FileReader(path));
-
-	if (DMGDisk::isDMG(g_fileReader))
-		g_partitions.reset(new DMGDisk(g_fileReader));
-	else if (GPTDisk::isGPTDisk(g_fileReader))
-		g_partitions.reset(new GPTDisk(g_fileReader));
-	else if (AppleDisk::isAppleDisk(g_fileReader))
-		g_partitions.reset(new AppleDisk(g_fileReader));
-	else if (HFSVolume::isHFSPlus(g_fileReader))
-		volume.reset(new HFSVolume(g_fileReader));
-	else
-		throw function_not_implemented_error("Unsupported file format");
-
-	if (g_partitions)
-	{
-		const std::vector<PartitionedDisk::Partition>& parts = g_partitions->partitions();
-
-		for (size_t i = 0; i < parts.size(); i++)
-		{
-			if (parts[i].type == "Apple_HFS" || parts[i].type == "Apple_HFSX")
-			{
-				std::cerr << "Using partition #" << i << " of type " << parts[i].type << std::endl;
-				partIndex = i;
-				break;
-			}
-			else
-				std::cerr << "Skipping partition of type " << parts[i].type << std::endl;
-		}
-
-		if (partIndex == -1)
-			throw function_not_implemented_error("No suitable partition found in file");
-
-		volume.reset(new HFSVolume(g_partitions->readerForPartition(partIndex)));
-	}
-	
-	g_volume.reset(new HFSHighLevelVolume(volume));
+	openDiskImage(path, image);
+	g_volume.reset(new HFSHighLevelVolume(image.volume));
+	g_volumeName = image.volume->volumeName();
+	g_blockSize = image.volume->blockSize();
+	image.volume->usage(g_totalBytes, g_freeBytes);
 }
 
+static int handle_exceptions_bsd(std::function<int()> func);
+
+// Runs a FUSE operation; a negative result is an error number for the kernel
 int handle_exceptions(std::function<int()> func)
+{
+	int result = handle_exceptions_bsd(func);
+#ifdef DARLING
+	if (result < 0)
+		result = -bsd_errno_to_linux(-result);
+#endif
+	return result;
+}
+
+// The operation's result, with Darwin error numbers (this module's own headers' ones)
+static int handle_exceptions_bsd(std::function<int()> func)
 {
 	try
 	{
@@ -276,6 +266,27 @@ int hfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler, off_t offse
 
 }
 
+// Darling's kernel layer asks the root of a FUSE volume for these two attributes to answer getattrlist(ATTR_VOL_NAME)
+// and statfs().f_fstypename the way macOS does: "darling.volume.name" is the volume name (UTF-8, unterminated) and
+// "darling.volume.kind" the file system kind. They are not listed; guests cannot see them, because guest xattrs are
+// all "user." ones on the host.
+static bool volumeAttribute(const char* path, const char* name, std::vector<uint8_t>& data)
+{
+	if (strcmp(path, "/") != 0)
+		return false;
+
+	const char* value;
+	if (strcmp(name, "darling.volume.name") == 0)
+		value = g_volumeName.c_str();
+	else if (strcmp(name, "darling.volume.kind") == 0)
+		value = "hfs";
+	else
+		return false;
+
+	data.assign(value, value + strlen(value));
+	return true;
+}
+
 #if defined(__APPLE__) && !defined(DARLING)
 int hfs_getxattr(const char* path, const char* name, char* value, size_t vlen, uint32_t position)
 #else
@@ -290,7 +301,17 @@ int hfs_getxattr(const char* path, const char* name, char* value, size_t vlen)
 	return handle_exceptions([&]() -> int {
 		std::vector<uint8_t> data;
 
-		data = g_volume->getXattr(path, name);
+		if (!volumeAttribute(path, name, data))
+		{
+#ifdef DARLING
+			// A guest's attribute "<name>" is "user.<name>" here; the volume has no others
+			if (strncmp(name, LINUX_XATTR_GUEST_PREFIX, strlen(LINUX_XATTR_GUEST_PREFIX)) != 0)
+				return -ENODATA;
+			data = g_volume->getXattr(path, name + strlen(LINUX_XATTR_GUEST_PREFIX));
+#else
+			data = g_volume->getXattr(path, name);
+#endif
+		}
 
 		if (value == nullptr)
 			return data.size();
@@ -303,6 +324,21 @@ int hfs_getxattr(const char* path, const char* name, char* value, size_t vlen)
 	});
 }
 
+// The volume's size and free space in its own allocation blocks, as macOS reports an HFS+ volume.
+int hfs_statfs(const char* path, struct statvfs* st)
+{
+	memset(st, 0, sizeof(*st));
+	if (g_blockSize == 0)
+		return -EIO;
+	st->f_bsize = g_blockSize;
+	st->f_frsize = g_blockSize;
+	st->f_blocks = g_totalBytes / g_blockSize;
+	st->f_bfree = g_freeBytes / g_blockSize;
+	st->f_bavail = st->f_bfree;
+	st->f_namemax = 255;
+	return 0;
+}
+
 int hfs_listxattr(const char* path, char* buffer, size_t size)
 {
 	return handle_exceptions([&]() -> int {
@@ -312,7 +348,13 @@ int hfs_listxattr(const char* path, char* buffer, size_t size)
 		attrs = g_volume->listXattr(path);
 
 		for (const std::string& str : attrs)
+		{
+#ifdef DARLING
+			const char* prefix = LINUX_XATTR_GUEST_PREFIX;
+			output.insert(output.end(), prefix, prefix + strlen(prefix));
+#endif
 			output.insert(output.end(), str.c_str(), str.c_str() + str.length() + 1);
+		}
 
 		if (buffer == nullptr)
 			return output.size();

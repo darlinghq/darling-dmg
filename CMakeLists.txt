@@ -30,6 +30,9 @@ set(dmg_sources
 	src/CachedReader.cpp
 
 	src/HFSHighLevelVolume.cpp
+	src/DiskImage.cpp
+	src/LicenseAgreement.cpp
+	src/MountPointName.cpp
 )
 
 
@@ -95,6 +98,9 @@ add_library(dmg SHARED
 	src/CachedReader.cpp
 
 	src/HFSHighLevelVolume.cpp
+	src/DiskImage.cpp
+	src/LicenseAgreement.cpp
+	src/MountPointName.cpp
 )
 target_compile_features(dmg PRIVATE cxx_std_11)
 target_link_libraries(dmg -licuuc -lcrypto -lz -lbz2 ${LIBXML2_LIBRARY})
@@ -129,14 +135,33 @@ else (NOT DARLING)
 
 	wrap_elf(fuse libfuse.so)
 
-	add_darling_executable(hdiutil
+	include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+	# Darling's private disk-image library, used by hdiutil and DiskImageMounter.
+	set(DYLIB_INSTALL_NAME "/usr/lib/darling/libdarling-dmg.dylib")
+	add_darling_library(darling-dmg
 		${dmg_sources}
+		src/darling_dmg.cpp
+	)
+	# links the LibreSSL 2.8.3 libcrypto.44, so compile against its headers
+	target_include_directories(darling-dmg BEFORE PRIVATE ${CMAKE_SOURCE_DIR}/src/external/libressl-2.8.3/include)
+	target_link_libraries(darling-dmg PRIVATE system cxx icucore z bz2 crypto44 xml2 iconv lzfse)
+	install(TARGETS darling-dmg DESTINATION libexec/darling/usr/lib/darling)
+
+	# Runs the FUSE file system of an attached image (started by libdarling-dmg).
+	add_darling_executable(darling-dmg-mount
+		src/main-mount.cpp
+	)
+	target_link_libraries(darling-dmg-mount darling-dmg fuse cxx)
+	install(TARGETS darling-dmg-mount DESTINATION libexec/darling/usr/libexec)
+
+	add_darling_executable(hdiutil
 		src/main-hdiutil.cpp
 	)
 
-	# links the LibreSSL 2.8.3 libcrypto.44, so compile against its headers
+	# links the LibreSSL 2.8.3 libcrypto.44 (through libdarling-dmg), so compile against its headers
 	target_include_directories(hdiutil BEFORE PRIVATE ${CMAKE_SOURCE_DIR}/src/external/libressl-2.8.3/include)
-	target_link_libraries(hdiutil fuse icucore z bz2 crypto44 xml2 iconv lzfse)
+	target_link_libraries(hdiutil darling-dmg cxx CoreFoundation DiskArbitration)
 	install(TARGETS hdiutil DESTINATION libexec/darling/usr/bin)
 
 endif (NOT DARLING)
