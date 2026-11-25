@@ -131,7 +131,7 @@ else (NOT DARLING)
 		${FUSE_INCLUDE_DIRS}
 	)
 
-	SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -nostdinc")
+	SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -nostdinc")
 
 	wrap_elf(fuse libfuse.so)
 
